@@ -3,7 +3,7 @@ services:
   flask-app:
     build: .
     ports:
-      - "5000:5000"
+      - "5001:5001"
     environment:
       # MongoDB 접속에 필요한 환경 변수를 설정합니다.
       # Flask 앱은 이 이름(mongodb)으로 MongoDB 컨테이너에 접근합니다.
