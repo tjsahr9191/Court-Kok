@@ -29,6 +29,10 @@ def home():
     """Renders the main index.html file for the frontend application."""
     return render_template('index.html')
 
+@app.route('/test')
+def test():
+    return "hello world"
+
 @app.route('/api/signup', methods=['POST'])
 def signup():
     """Handles user registration and stores credentials in MongoDB."""
