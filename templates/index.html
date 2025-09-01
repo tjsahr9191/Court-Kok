@@ -130,26 +130,10 @@
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Global variables provided by the environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // Initialize Firebase
-        let app;
-        let auth;
-        let db;
+    <script>
+        // Global variables for user and reservation data
         let currentUser = null;
-        let isAuthReady = false;
-        
-        const loader = document.getElementById('loading-spinner');
-        const showLoader = () => loader.classList.remove('hidden');
-        const hideLoader = () => loader.classList.add('hidden');
+        let reservations = {};
 
         // UI Elements
         const authView = document.getElementById('auth-view');
@@ -188,25 +172,17 @@
         const alertOkBtn = document.getElementById('alert-ok-btn');
 
         let selectedSlotInfo = null;
-        let reservations = {}; // Cache reservations
 
         // Utility Functions
-        function showModal(modal) {
-            modal.classList.remove('hidden');
-        }
-
-        function hideModal(modal) {
-            modal.classList.add('hidden');
-        }
-
-        function showAlert(message) {
+        const showLoader = () => document.getElementById('loading-spinner').classList.remove('hidden');
+        const hideLoader = () => document.getElementById('loading-spinner').classList.add('hidden');
+        const showModal = (modal) => modal.classList.remove('hidden');
+        const hideModal = (modal) => modal.classList.add('hidden');
+        const showAlert = (message) => {
             alertMessage.textContent = message;
             showModal(alertModal);
-        }
-
-        alertOkBtn.addEventListener('click', () => {
-            hideModal(alertModal);
-        });
+        };
+        alertOkBtn.addEventListener('click', () => hideModal(alertModal));
 
         const getWeekRange = () => {
             const now = new Date();
@@ -224,7 +200,8 @@
 
         const formatDate = (date) => {
             const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-            return `${date.getMonth() + 1}.${date.getDate()}(${dayNames[date.getDay()]})`;
+            const d = new Date(date);
+            return `${d.getMonth() + 1}.${d.getDate()}(${dayNames[d.getDay()]})`;
         };
 
         const formatHour = (hour) => {
@@ -232,54 +209,18 @@
             return `${String(hour).padStart(2, '0')}:00 - ${String(nextHour).padStart(2, '0')}:00`;
         };
         
-        // Firestore Helper Functions
-        const getReservationsCollection = (userId) => {
-            const collectionPath = `/artifacts/${appId}/users/${userId}/reservations`;
-            return collection(db, collectionPath);
-        };
-
-        const getPublicReservationsCollection = () => {
-            const collectionPath = `/artifacts/${appId}/public/data/reservations`;
-            return collection(db, collectionPath);
-        };
-
-        const createReservation = async (slotId, time, date, capacity) => {
-            if (!currentUser) return;
-            const collectionRef = getPublicReservationsCollection();
-            const reservationData = {
-                slotId: slotId,
-                time,
-                date,
-                capacity: parseInt(capacity),
-                creatorId: currentUser.uid,
-                creatorName: currentUser.displayName,
-                creatorPhone: currentUser.phoneNumber,
-                participants: [currentUser.uid],
-                createdAt: new Date(),
-            };
+        const fetchReservations = async () => {
             try {
-                await addDoc(collectionRef, reservationData);
-                console.log('Reservation created successfully');
+                const response = await fetch('/api/reservations');
+                if (!response.ok) throw new Error('Failed to fetch reservations');
+                const result = await response.json();
+                reservations = {};
+                result.data.forEach(res => {
+                    reservations[res.slotId] = res;
+                });
+                renderTable();
             } catch (error) {
-                console.error("Error creating reservation:", error);
-            }
-        };
-
-        const updateReservation = async (docId, data) => {
-            const docRef = doc(getPublicReservationsCollection(), docId);
-            try {
-                await updateDoc(docRef, data);
-            } catch (error) {
-                console.error("Error updating reservation:", error);
-            }
-        };
-
-        const deleteReservation = async (docId) => {
-            const docRef = doc(getPublicReservationsCollection(), docId);
-            try {
-                await deleteDoc(docRef);
-            } catch (error) {
-                console.error("Error deleting reservation:", error);
+                console.error("Error fetching reservations:", error);
             }
         };
 
@@ -296,14 +237,11 @@
                 row.innerHTML = `
                     <td class="p-3 font-medium text-gray-700 text-sm border-b border-gray-200">${formatHour(hour)}</td>
                     ${weekDays.map((day, dayIndex) => {
-                        const slotId = `slot-${dayIndex}-${hour}`;
+                        const slotId = `${day.toISOString().split('T')[0]}-${hour}`;
                         const reservation = reservations[slotId];
                         let bgColor = 'bg-gray-400';
-                        let cursor = 'cursor-pointer';
                         
                         if (reservation) {
-                            const isCreator = currentUser && reservation.creatorId === currentUser.uid;
-                            const isParticipant = currentUser && reservation.participants.includes(currentUser.uid);
                             if (reservation.participants.length >= reservation.capacity) {
                                 bgColor = 'bg-red-500';
                             } else {
@@ -313,10 +251,10 @@
                         return `
                             <td class="p-1 border-b border-gray-200">
                                 <div id="${slotId}" 
-                                     class="w-full h-10 rounded-lg ${bgColor} ${cursor} transition duration-150 transform hover:scale-105"
-                                     data-day="${day.toISOString()}" 
-                                     data-hour="${hour}"
-                                     data-slot-id="${slotId}">
+                                     class="w-full h-10 rounded-lg ${bgColor} cursor-pointer transition duration-150 transform hover:scale-105"
+                                     data-slot-id="${slotId}"
+                                     data-date="${day.toISOString()}" 
+                                     data-hour="${hour}">
                                 </div>
                             </td>
                         `;
@@ -333,6 +271,7 @@
             const start = formatDate(weekDays[0]);
             const end = formatDate(weekDays[weekDays.length - 1]);
             dateRangeHeader.textContent = `(${start} - ${end})`;
+            fetchReservations();
         };
         
         const showAuthView = () => {
@@ -357,13 +296,22 @@
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             showLoader();
-            const email = document.getElementById('login-id').value + "@courtkok.com"; // Use a dummy domain for simplicity
-            const password = document.getElementById('login-pw').value;
+            const id = document.getElementById('login-id').value;
+            const pw = document.getElementById('login-pw').value;
             try {
-                await signInWithEmailAndPassword(auth, email, password);
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id, pw})
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    await checkSessionAndLoadData();
+                } else {
+                    showAlert(result.message);
+                }
             } catch (error) {
-                console.error("Login failed:", error);
-                showAlert("로그인 실패: 아이디 또는 비밀번호를 확인해주세요.");
+                showAlert("네트워크 오류가 발생했습니다.");
             } finally {
                 hideLoader();
             }
@@ -374,49 +322,63 @@
             showLoader();
             const name = document.getElementById('signup-name').value;
             const id = document.getElementById('signup-id').value;
-            const password = document.getElementById('signup-pw').value;
+            const pw = document.getElementById('signup-pw').value;
             const confirmPw = document.getElementById('signup-confirm-pw').value;
             const email = document.getElementById('signup-email').value;
             const phone = document.getElementById('signup-phone').value;
 
-            if (password !== confirmPw) {
+            if (pw !== confirmPw) {
                 showAlert("비밀번호가 일치하지 않습니다.");
                 hideLoader();
                 return;
             }
-
-            const dummyEmail = id + "@courtkok.com";
+            
             try {
-                const userCredential = await createUserWithEmailAndPassword(auth, dummyEmail, password);
-                const user = userCredential.user;
-                // Save additional user info to Firestore
-                await setDoc(doc(db, `artifacts/${appId}/users/${user.uid}/profile/info`), {
-                    name,
-                    email,
-                    phone,
-                    id,
+                const response = await fetch('/api/signup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, id, pw, email, phone})
                 });
-                console.log("User signed up and profile saved.");
+                const result = await response.json();
+                showAlert(result.message);
+                if (response.ok) {
+                    document.getElementById('login-id').value = id;
+                    document.getElementById('login-pw').value = pw;
+                    showLoginBtn.click();
+                }
             } catch (error) {
-                console.error("Signup failed:", error);
-                showAlert(`회원가입 실패: ${error.message}`);
+                showAlert("네트워크 오류가 발생했습니다.");
             } finally {
                 hideLoader();
             }
         });
 
         logoutBtn.addEventListener('click', async () => {
-            await signOut(auth);
+            showLoader();
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                currentUser = null;
+                showAuthView();
+            } catch (error) {
+                console.error("Logout failed:", error);
+            } finally {
+                hideLoader();
+            }
         });
 
-        scheduleTable.addEventListener('click', (e) => {
+        scheduleTable.addEventListener('click', async (e) => {
             const slot = e.target.closest('div');
-            if (!slot || !currentUser) return;
+            if (!slot) return;
+
+            if (!currentUser) {
+                showAlert("예약하려면 먼저 로그인해야 합니다.");
+                return;
+            }
             
-            const { slotId, day, hour } = slot.dataset;
+            const { slotId, date, hour } = slot.dataset;
             selectedSlotInfo = {
                 slotId,
-                date: day,
+                date: new Date(date),
                 hour: parseInt(hour),
                 reservation: reservations[slotId]
             };
@@ -425,56 +387,34 @@
             
             if (!reservation) {
                 // Gray slot: Create new reservation
-                reserveModalDate.textContent = formatDate(new Date(day));
-                reserveModalTime.textContent = formatHour(parseInt(hour));
+                reserveModalDate.textContent = `날짜: ${formatDate(selectedSlotInfo.date)}`;
+                reserveModalTime.textContent = `시간: ${formatHour(selectedSlotInfo.hour)}`;
                 showModal(reserveModal);
             } else {
-                const isCreator = reservation.creatorId === currentUser.uid;
-                const isParticipant = reservation.participants.includes(currentUser.uid);
+                const isCreator = reservation.creatorId === currentUser.userId;
+                const isParticipant = reservation.participants.includes(currentUser.userId);
+
+                joinModalDate.textContent = `날짜: ${formatDate(selectedSlotInfo.date)}`;
+                joinModalTime.textContent = `시간: ${formatHour(selectedSlotInfo.hour)}`;
+                joinModalCreator.textContent = `이벤트 생성자: ${reservation.creatorName || '알 수 없음'}`;
+                joinModalPhone.textContent = `전화번호: ${reservation.creatorPhone || '알 수 없음'}`;
+                joinModalCapacity.textContent = `인원: ${reservation.participants.length} / ${reservation.capacity}`;
+                
+                joinEventBtn.classList.add('hidden');
+                cancelJoinBtn.classList.add('hidden');
+                deleteEventBtn.classList.add('hidden');
 
                 if (isCreator) {
-                    // Creator's slot: Show details and delete button
-                    joinModalDate.textContent = `날짜: ${formatDate(new Date(day))}`;
-                    joinModalTime.textContent = `시간: ${formatHour(parseInt(hour))}`;
-                    joinModalCreator.textContent = `이벤트 생성자: ${reservation.creatorName || '알 수 없음'}`;
-                    joinModalPhone.textContent = `전화번호: ${reservation.creatorPhone || '알 수 없음'}`;
-                    joinModalCapacity.textContent = `인원: ${reservation.participants.length} / ${reservation.capacity}`;
-
-                    joinEventBtn.classList.add('hidden');
-                    cancelJoinBtn.classList.add('hidden');
                     deleteEventBtn.classList.remove('hidden');
-                    showModal(joinModal);
-
                 } else if (isParticipant) {
-                    // Already joined: Show details and cancel button
-                    joinModalDate.textContent = `날짜: ${formatDate(new Date(day))}`;
-                    joinModalTime.textContent = `시간: ${formatHour(parseInt(hour))}`;
-                    joinModalCreator.textContent = `이벤트 생성자: ${reservation.creatorName || '알 수 없음'}`;
-                    joinModalPhone.textContent = `전화번호: ${reservation.creatorPhone || '알 수 없음'}`;
-                    joinModalCapacity.textContent = `인원: ${reservation.participants.length} / ${reservation.capacity}`;
-                    
-                    joinEventBtn.classList.add('hidden');
-                    deleteEventBtn.classList.add('hidden');
                     cancelJoinBtn.classList.remove('hidden');
-                    showModal(joinModal);
-                    
                 } else if (reservation.participants.length >= reservation.capacity) {
-                    // Red slot: Full capacity
                     showAlert("슬롯이 가득 찼습니다. 다른 시간을 선택하거나 취소될 때까지 기다려 주세요.");
-                    
+                    return;
                 } else {
-                    // Blue slot: Join reservation
-                    joinModalDate.textContent = `날짜: ${formatDate(new Date(day))}`;
-                    joinModalTime.textContent = `시간: ${formatHour(parseInt(hour))}`;
-                    joinModalCreator.textContent = `이벤트 생성자: ${reservation.creatorName || '알 수 없음'}`;
-                    joinModalPhone.textContent = `전화번호: ${reservation.creatorPhone || '알 수 없음'}`;
-                    joinModalCapacity.textContent = `인원: ${reservation.participants.length} / ${reservation.capacity}`;
-                    
-                    cancelJoinBtn.classList.add('hidden');
-                    deleteEventBtn.classList.add('hidden');
                     joinEventBtn.classList.remove('hidden');
-                    showModal(joinModal);
                 }
+                showModal(joinModal);
             }
         });
 
@@ -483,117 +423,121 @@
         cancelJoinModalBtn.addEventListener('click', () => hideModal(joinModal));
 
         confirmReserveBtn.addEventListener('click', async () => {
-            const { slotId, date, hour } = selectedSlotInfo;
+            const { slotId } = selectedSlotInfo;
             const capacity = reserveCapacityInput.value;
             if (capacity < 1) {
                 showAlert("최소 인원은 1명입니다.");
                 return;
             }
             showLoader();
-            await createReservation(slotId, formatHour(hour), formatDate(new Date(date)), capacity);
-            hideModal(reserveModal);
-            hideLoader();
+            try {
+                const response = await fetch('/api/reservations/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ slotId, capacity })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    await fetchReservations();
+                }
+                showAlert(result.message);
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideModal(reserveModal);
+                hideLoader();
+            }
         });
 
         joinEventBtn.addEventListener('click', async () => {
-            if (!selectedSlotInfo || !currentUser) return;
-            const { reservation } = selectedSlotInfo;
-            if (reservation.participants.length >= reservation.capacity) {
-                showAlert("슬롯이 이미 가득 찼습니다.");
-                hideModal(joinModal);
-                return;
-            }
-            const updatedParticipants = [...new Set([...reservation.participants, currentUser.uid])];
+            if (!selectedSlotInfo) return;
+            const { slotId } = selectedSlotInfo;
             showLoader();
-            await updateReservation(reservation.id, { participants: updatedParticipants });
-            hideModal(joinModal);
-            hideLoader();
+            try {
+                const response = await fetch('/api/reservations/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: 'join', slotId })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    await fetchReservations();
+                }
+                showAlert(result.message);
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideModal(joinModal);
+                hideLoader();
+            }
         });
 
         cancelJoinBtn.addEventListener('click', async () => {
-            if (!selectedSlotInfo || !currentUser) return;
-            const { reservation } = selectedSlotInfo;
-            const updatedParticipants = reservation.participants.filter(id => id !== currentUser.uid);
-            
+            if (!selectedSlotInfo) return;
+            const { slotId } = selectedSlotInfo;
             showLoader();
-            if (updatedParticipants.length === 0) {
-                 await deleteReservation(reservation.id);
-            } else {
-                 await updateReservation(reservation.id, { participants: updatedParticipants });
+            try {
+                const response = await fetch('/api/reservations/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: 'cancel', slotId })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    await fetchReservations();
+                }
+                showAlert(result.message);
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideModal(joinModal);
+                hideLoader();
             }
-            hideModal(joinModal);
-            hideLoader();
         });
         
         deleteEventBtn.addEventListener('click', async () => {
-             if (!selectedSlotInfo || !currentUser) return;
-             const { reservation } = selectedSlotInfo;
-             if (reservation.creatorId !== currentUser.uid) return;
-             
-             showLoader();
-             await deleteReservation(reservation.id);
-             hideModal(joinModal);
-             hideLoader();
-        });
-
-        // Firebase Auth State Listener
-        window.onload = function() {
+            if (!selectedSlotInfo) return;
+            const { slotId } = selectedSlotInfo;
+            showLoader();
             try {
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        currentUser = user;
-                        // Fetch user profile from Firestore to get name, phone, etc.
-                        const userProfileDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/profile/info`);
-                        const userProfileDoc = await getDoc(userProfileDocRef);
-                        if (userProfileDoc.exists()) {
-                            const profileData = userProfileDoc.data();
-                            user.displayName = profileData.name;
-                            user.phoneNumber = profileData.phone;
-                        } else {
-                           // If new user, set some default display info
-                           user.displayName = "새 사용자";
-                        }
-                        showMainApp();
-                        
-                        // Set up real-time listener for public reservations
-                        onSnapshot(getPublicReservationsCollection(), (snapshot) => {
-                            reservations = {};
-                            snapshot.forEach(doc => {
-                                const data = doc.data();
-                                reservations[data.slotId] = { ...data, id: doc.id };
-                            });
-                            renderTable();
-                        });
-
-                    } else {
-                        currentUser = null;
-                        showAuthView();
-                        
-                        // If no user, try to sign in with the custom token if available
-                        if (initialAuthToken) {
-                            try {
-                                await signInWithCustomToken(auth, initialAuthToken);
-                            } catch (error) {
-                                console.error("Custom auth token sign-in failed:", error);
-                                await signInAnonymously(auth);
-                            }
-                        } else {
-                             await signInAnonymously(auth);
-                        }
-                    }
-                    isAuthReady = true;
-                    hideLoader();
+                const response = await fetch('/api/reservations/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ slotId })
                 });
-            } catch (e) {
-                console.error("Firebase initialization failed:", e);
+                const result = await response.json();
+                if (response.ok) {
+                    await fetchReservations();
+                }
+                showAlert(result.message);
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideModal(joinModal);
+                hideLoader();
+            }
+        });
+        
+        const checkSessionAndLoadData = async () => {
+            showLoader();
+            try {
+                const response = await fetch('/api/user_info');
+                if (response.ok) {
+                    const userInfo = await response.json();
+                    currentUser = userInfo;
+                    showMainApp();
+                } else {
+                    showAuthView();
+                }
+            } catch (error) {
+                console.error("Session check failed:", error);
+                showAuthView();
+            } finally {
                 hideLoader();
             }
         };
 
+        window.onload = checkSessionAndLoadData;
     </script>
 </body>
 </html>
