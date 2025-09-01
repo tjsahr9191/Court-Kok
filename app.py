@@ -17,7 +17,7 @@ MONGO_HOST = os.environ.get('MONGO_HOST', 'localhost')
 try:
     client = MongoClient(f'mongodb://{MONGO_HOST}:27017/')
     db = client.court_kok
-    db.admin.command('ping') # Check connection
+    client.admin.command('ping') # Check connections
     print("Successfully connected to MongoDB.")
 except Exception as e:
     print(f"Failed to connect to MongoDB: {e}")
@@ -31,7 +31,8 @@ def home():
 
 @app.route('/test')
 def test():
-    return "hello world!!!"
+    db.test.insert_one({"name": "test"})
+    return "hi world!!!"
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
