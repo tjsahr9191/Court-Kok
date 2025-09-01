@@ -31,7 +31,6 @@ def home():
 
 @app.route('/test')
 def test():
-    db.test.insert_one({"name": "test"})
     return "hi world!!!"
 
 @app.route('/api/signup', methods=['POST'])
@@ -71,7 +70,7 @@ def signup():
 @app.route('/api/login', methods=['POST'])
 def login():
     """Authenticates user and creates a session upon successful login."""
-    if not db:
+    if db is None:
         return jsonify({"status": "error", "message": "Database not connected"}), 500
     
     data = request.json
