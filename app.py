@@ -31,7 +31,7 @@ def home():
 
 @app.route('/test')
 def test():
-    return "hello world"
+    return "hello world!!!"
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
