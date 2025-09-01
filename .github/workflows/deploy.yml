@@ -37,15 +37,15 @@ jobs:
       # 4. Docker 이미지를 빌드합니다.
       # EC2 인스턴스가 amd64 아키텍처일 경우를 대비해 --platform 명시
       - name: Build Docker image
-        run: docker build --platform linux/amd64 -t my-flask-app .
+        run: docker build --platform linux/amd64 -t court-kok-server .
 
       # 5. 빌드한 Docker 이미지에 ECR 주소를 포함한 태그를 붙입니다.
       - name: Tag Docker image
-        run: docker tag my-flask-app ${{ steps.login-ecr.outputs.registry }}/my-flask-app:latest
+        run: docker tag court-kok-server ${{ steps.login-ecr.outputs.registry }}/court-kok-server:latest
 
       # 6. ECR에 Docker 이미지를 푸시합니다.
       - name: Push Docker image to ECR
-        run: docker push ${{ steps.login-ecr.outputs.registry }}/my-flask-app:latest
+        run: docker push ${{ steps.login-ecr.outputs.registry }}/court-kok-server:latest
 
       # 7. docker-compose.yml 파일을 EC2로 복사합니다.
       - name: Copy docker-compose.yml to EC2
@@ -71,7 +71,7 @@ jobs:
 
             # 'sed' 명령어를 사용하여 복사된 docker-compose.yml 파일의 'IMAGE_PLACEHOLDER'를
             # 실제 ECR 이미지 주소로 치환합니다.
-            sed -i "s|IMAGE_PLACEHOLDER|${{ steps.login-ecr.outputs.registry }}/my-flask-app:latest|g" docker-compose.yml
+            sed -i "s|IMAGE_PLACEHOLDER|${{ steps.login-ecr.outputs.registry }}/court-kok-server:latest|g" docker-compose.yml
 
             # (선택사항) EC2 인스턴스에 IAM 역할이 없다면 아래 로그인 명령어가 필요합니다.
             # aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
