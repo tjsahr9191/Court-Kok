@@ -36,7 +36,7 @@ def test():
 @app.route('/api/signup', methods=['POST'])
 def signup():
     """Handles user registration and stores credentials in MongoDB."""
-    if not db:
+    if db is None:
         return jsonify({"status": "error", "message": "Database not connected"}), 500
     
     data = request.json
@@ -158,7 +158,7 @@ def update_reservation():
     slot_id = data.get('slotId')
     
     reservation = db.reservations.find_one({"slotId": slot_id})
-    if not reservation:
+    if reservation is None:
         return jsonify({"status": "error", "message": "예약을 찾을 수 없습니다."}), 404
 
     user_id = session['user_id']
