@@ -1,0 +1,25 @@
+services:
+  # Flask 웹 애플리케이션 서비스
+  flask-app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      # MongoDB 접속에 필요한 환경 변수를 설정합니다.
+      # Flask 앱은 이 이름(mongodb)으로 MongoDB 컨테이너에 접근합니다.
+      - MONGO_HOST=mongodb
+    depends_on:
+      - mongodb
+
+  # MongoDB 데이터베이스 서비스
+  mongodb:
+    image: mongo:latest
+    # MongoDB 컨테이너의 포트를 외부에 노출시킬 필요가 없습니다.
+    # Flask 앱은 내부 네트워크를 통해 접근하므로 expose만으로 충분합니다.
+    expose:
+      - "27017"
+    volumes:
+      - ./mongodb_data:/data/db
+
+volumes:
+  mongodb_data:
