@@ -1,0 +1,20 @@
+services:
+  flask-app:
+    # 이 부분은 배포 시점에 실제 ECR 이미지 주소로 교체됩니다.
+    image: IMAGE_PLACEHOLDER
+    ports:
+      - "5001:5001"
+    environment:
+      - MONGO_HOST=mongodb
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: mongo:latest
+    expose:
+      - "27017"
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  mongodb_data:

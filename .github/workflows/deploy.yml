@@ -1,0 +1,86 @@
+# 워크플로우 이름
+name: Deploy Flask App to EC2
+
+# 워크플로우 실행 조건: main 브랜치에 push 이벤트가 발생했을 때
+on:
+  push:
+    branches:
+      - main
+
+# 실행될 작업(Job) 정의
+jobs:
+  deploy:
+    # 작업이 실행될 환경: 최신 우분투
+    runs-on: ubuntu-latest
+
+    # 작업의 단계(Step)들
+    steps:
+      # 1. GitHub Repository의 코드를 runner로 가져옵니다.
+      # 이 단계를 통해 docker-compose.yml 파일도 함께 가져옵니다.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. AWS 자격 증명을 설정합니다.
+      # AWS 리전, Access Key, Secret Access Key를 GitHub Secret에서 가져옵니다.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ap-northeast-2
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      # 3. Amazon ECR(Elastic Container Registry)에 로그인합니다.
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4. Docker 이미지를 빌드합니다.
+      # EC2 인스턴스가 amd64 아키텍처일 경우를 대비해 --platform 명시
+      - name: Build Docker image
+        run: docker build --platform linux/amd64 -t my-flask-app .
+
+      # 5. 빌드한 Docker 이미지에 ECR 주소를 포함한 태그를 붙입니다.
+      - name: Tag Docker image
+        run: docker tag my-flask-app ${{ steps.login-ecr.outputs.registry }}/my-flask-app:latest
+
+      # 6. ECR에 Docker 이미지를 푸시합니다.
+      - name: Push Docker image to ECR
+        run: docker push ${{ steps.login-ecr.outputs.registry }}/my-flask-app:latest
+
+      # 7. docker-compose.yml 파일을 EC2로 복사합니다.
+      - name: Copy docker-compose.yml to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          source: "docker-compose.yml" # 레포지토리에 있는 파일
+          target: "~/app"              # EC2 인스턴스의 대상 폴더
+
+      # 8. SSH를 통해 EC2에 접속하여 배포 스크립트를 실행합니다.
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script_stop: true # 중간에 에러 발생 시 스크립트를 중단합니다.
+          script: |
+            # 작업 디렉토리로 이동
+            cd ~/app
+
+            # 'sed' 명령어를 사용하여 복사된 docker-compose.yml 파일의 'IMAGE_PLACEHOLDER'를
+            # 실제 ECR 이미지 주소로 치환합니다.
+            sed -i "s|IMAGE_PLACEHOLDER|${{ steps.login-ecr.outputs.registry }}/my-flask-app:latest|g" docker-compose.yml
+
+            # (선택사항) EC2 인스턴스에 IAM 역할이 없다면 아래 로그인 명령어가 필요합니다.
+            # aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+            
+            # docker-compose로 flask-app 서비스의 최신 이미지를 pull 합니다.
+            docker-compose pull flask-app
+            
+            # docker-compose로 모든 서비스를 백그라운드에서 실행(재시작)합니다.
+            docker-compose up -d --remove-orphans
+            
+            # 사용하지 않는 Docker 이미지를 정리하여 디스크 공간을 확보합니다.
+            docker image prune -f
