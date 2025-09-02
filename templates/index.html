@@ -14,20 +14,13 @@
             -moz-user-select: none;
             user-select: none;
         }
-        .container {
-            max-width: 900px;
-        }
-        .scroll-container::-webkit-scrollbar {
-            width: 8px;
-        }
+        .container { max-width: 900px; }
+        .scroll-container::-webkit-scrollbar { width: 8px; }
         .scroll-container::-webkit-scrollbar-track {
-            background: #e5e7eb;
-            border-radius: 10px;
+            background: #e5e7eb; border-radius: 10px;
         }
         .scroll-container::-webkit-scrollbar-thumb {
-            background-color: #9ca3af;
-            border-radius: 10px;
-            border: 2px solid #e5e7eb;
+            background-color: #9ca3af; border-radius: 10px; border: 2px solid #e5e7eb;
         }
     </style>
 </head>
@@ -73,7 +66,7 @@
             <h1 id="date-range-header" class="text-xl sm:text-2xl font-bold text-gray-800"></h1>
             <button id="logout-btn" class="text-sm text-gray-500 hover:text-gray-700">로그아웃</button>
         </div>
-        
+
         <div class="overflow-x-auto scroll-container">
             <table class="min-w-full table-auto border-separate border-spacing-1">
                 <thead class="bg-gray-100">
@@ -82,10 +75,10 @@
                 <tbody id="schedule-table"></tbody>
             </table>
         </div>
-        
+
         <p class="text-sm text-center text-gray-500 mt-4">
-            <span class="inline-block w-4 h-4 rounded-full bg-gray-400 mr-2"></span>빈 슬롯 / 
-            <span class="inline-block w-4 h-4 rounded-full bg-blue-500 mr-2 ml-2"></span>참여가능 / 
+            <span class="inline-block w-4 h-4 rounded-full bg-gray-400 mr-2"></span>빈 슬롯 /
+            <span class="inline-block w-4 h-4 rounded-full bg-blue-500 mr-2 ml-2"></span>참여가능 /
             <span class="inline-block w-4 h-4 rounded-full bg-red-500 mr-2 ml-2"></span>정원초과
         </p>
         <p class="text-sm text-center text-gray-500 mt-2">블록을 클릭하여 예약하거나 참여하세요.</p>
@@ -116,7 +109,7 @@
             <p id="join-modal-capacity" class="text-sm text-gray-600 mb-4"></p>
             <div class="flex justify-end space-x-2">
                 <button id="cancel-join-modal-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">닫기</button>
-                <button id="join-event-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">참여하기</button>
+                <button id="join-event-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hidden">참여하기</button>
                 <button id="cancel-join-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 hidden">취소하기</button>
                 <button id="delete-event-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 hidden">예약 삭제</button>
             </div>
@@ -131,7 +124,43 @@
     </div>
 
     <script>
-        // Global variables for user and reservation data
+        // =======================
+        // JWT Utilities (NEW)
+        // =======================
+        const getToken = () => localStorage.getItem('token');
+        const setToken = (t) => localStorage.setItem('token', t);
+        const clearToken = () => localStorage.removeItem('token');
+
+        const authHeaders = () => {
+            const t = getToken();
+            return t ? { 'Authorization': `Bearer ${t}` } : {};
+        };
+
+        // 공통 fetch 래퍼: 401 처리 일원화
+        const authedFetch = async (url, options = {}) => {
+            const baseHeaders = options.headers || {};
+            const merged = {
+                ...options,
+                headers: { ...baseHeaders, ...authHeaders() }
+            };
+            const res = await fetch(url, merged);
+            if (res.status === 401) {
+                // 토큰 무효/만료/미전달 → 세션 초기화
+                clearToken();
+                currentUser = null;
+                showAuthView();
+                try {
+                    const data = await res.json();
+                    if (data?.message) showAlert(data.message);
+                } catch (_) {}
+                throw new Error('Unauthorized');
+            }
+            return res;
+        };
+
+        // =======================
+        // Global state
+        // =======================
         let currentUser = null;
         let reservations = {};
 
@@ -148,7 +177,7 @@
         const dateRangeHeader = document.getElementById('date-range-header');
         const scheduleTable = document.getElementById('schedule-table');
         const tableHeader = document.getElementById('table-header');
-        
+
         const reserveModal = document.getElementById('reserve-modal');
         const joinModal = document.getElementById('join-modal');
         const alertModal = document.getElementById('alert-modal');
@@ -173,27 +202,23 @@
 
         let selectedSlotInfo = null;
 
-        // Utility Functions
+        // Utilities
         const showLoader = () => document.getElementById('loading-spinner').classList.remove('hidden');
         const hideLoader = () => document.getElementById('loading-spinner').classList.add('hidden');
         const showModal = (modal) => modal.classList.remove('hidden');
         const hideModal = (modal) => modal.classList.add('hidden');
-        const showAlert = (message) => {
-            alertMessage.textContent = message;
-            showModal(alertModal);
-        };
+        const showAlert = (message) => { alertMessage.textContent = message; showModal(alertModal); };
         alertOkBtn.addEventListener('click', () => hideModal(alertModal));
 
         const getWeekRange = () => {
+            // 오늘 10시부터 7일
             const now = new Date();
-            const startOfWeek = new Date(now);
-            startOfWeek.setHours(10, 0, 0, 0);
-            
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0, 0);
             const days = [];
             for (let i = 0; i < 7; i++) {
-                const date = new Date(startOfWeek);
-                date.setDate(now.getDate() + i);
-                days.push(date);
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                days.push(d);
             }
             return days;
         };
@@ -208,23 +233,21 @@
             const nextHour = hour + 1;
             return `${String(hour).padStart(2, '0')}:00 - ${String(nextHour).padStart(2, '0')}:00`;
         };
-        
+
         const fetchReservations = async () => {
             try {
                 const response = await fetch('/api/reservations');
                 if (!response.ok) throw new Error('Failed to fetch reservations');
                 const result = await response.json();
                 reservations = {};
-                result.data.forEach(res => {
-                    reservations[res.slotId] = res;
-                });
+                result.data.forEach(res => { reservations[res.slotId] = res; });
                 renderTable();
             } catch (error) {
                 console.error("Error fetching reservations:", error);
             }
         };
 
-        // UI Rendering Logic
+        // UI Rendering
         const renderTable = () => {
             const weekDays = getWeekRange();
             tableHeader.innerHTML = `
@@ -236,24 +259,19 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="p-3 font-medium text-gray-700 text-sm border-b border-gray-200">${formatHour(hour)}</td>
-                    ${weekDays.map((day, dayIndex) => {
+                    ${weekDays.map((day) => {
                         const slotId = `${day.toISOString().split('T')[0]}-${hour}`;
                         const reservation = reservations[slotId];
                         let bgColor = 'bg-gray-400';
-                        
                         if (reservation) {
-                            if (reservation.participants.length >= reservation.capacity) {
-                                bgColor = 'bg-red-500';
-                            } else {
-                                bgColor = 'bg-blue-500';
-                            }
+                            bgColor = (reservation.participants.length >= reservation.capacity) ? 'bg-red-500' : 'bg-blue-500';
                         }
                         return `
                             <td class="p-1 border-b border-gray-200">
-                                <div id="${slotId}" 
+                                <div id="${slotId}"
                                      class="w-full h-10 rounded-lg ${bgColor} cursor-pointer transition duration-150 transform hover:scale-105"
                                      data-slot-id="${slotId}"
-                                     data-date="${day.toISOString()}" 
+                                     data-date="${day.toISOString()}"
                                      data-hour="${hour}">
                                 </div>
                             </td>
@@ -273,7 +291,7 @@
             dateRangeHeader.textContent = `(${start} - ${end})`;
             fetchReservations();
         };
-        
+
         const showAuthView = () => {
             mainView.classList.add('hidden');
             authView.classList.remove('hidden');
@@ -293,6 +311,7 @@
             loginFormContainer.classList.remove('hidden');
         });
 
+        // 로그인
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             showLoader();
@@ -306,7 +325,10 @@
                 });
                 const result = await response.json();
                 if (response.ok) {
-                    await checkSessionAndLoadData();
+                    const token = result.access_token || result.accessToken || result.token;
+                    if (!token) { showAlert("토큰 발급에 실패했습니다."); return; }
+                    setToken(token);                      // 토큰 저장 (NEW)
+                    await checkSessionAndLoadData();      // 사용자 정보 로드
                 } else {
                     showAlert(result.message);
                 }
@@ -317,6 +339,7 @@
             }
         });
 
+        // 회원가입
         signupForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             showLoader();
@@ -327,12 +350,8 @@
             const email = document.getElementById('signup-email').value;
             const phone = document.getElementById('signup-phone').value;
 
-            if (pw !== confirmPw) {
-                showAlert("비밀번호가 일치하지 않습니다.");
-                hideLoader();
-                return;
-            }
-            
+            if (pw !== confirmPw) { showAlert("비밀번호가 일치하지 않습니다."); hideLoader(); return; }
+
             try {
                 const response = await fetch('/api/signup', {
                     method: 'POST',
@@ -353,28 +372,28 @@
             }
         });
 
+        // 로그아웃
         logoutBtn.addEventListener('click', async () => {
             showLoader();
             try {
-                await fetch('/api/logout', { method: 'POST' });
-                currentUser = null;
-                showAuthView();
+                await authedFetch('/api/logout', { method: 'POST' }); // 토큰 첨부
             } catch (error) {
                 console.error("Logout failed:", error);
             } finally {
+                clearToken();      // 클라이언트 토큰 제거
+                currentUser = null;
+                showAuthView();
                 hideLoader();
             }
         });
 
+        // 슬롯 클릭
         scheduleTable.addEventListener('click', async (e) => {
             const slot = e.target.closest('div');
             if (!slot) return;
 
-            if (!currentUser) {
-                showAlert("예약하려면 먼저 로그인해야 합니다.");
-                return;
-            }
-            
+            if (!currentUser) { showAlert("예약하려면 먼저 로그인해야 합니다."); return; }
+
             const { slotId, date, hour } = slot.dataset;
             selectedSlotInfo = {
                 slotId,
@@ -382,11 +401,11 @@
                 hour: parseInt(hour),
                 reservation: reservations[slotId]
             };
-            
+
             const reservation = selectedSlotInfo.reservation;
-            
+
             if (!reservation) {
-                // Gray slot: Create new reservation
+                // 새 예약
                 reserveModalDate.textContent = `날짜: ${formatDate(selectedSlotInfo.date)}`;
                 reserveModalTime.textContent = `시간: ${formatHour(selectedSlotInfo.hour)}`;
                 showModal(reserveModal);
@@ -399,7 +418,7 @@
                 joinModalCreator.textContent = `이벤트 생성자: ${reservation.creatorName || '알 수 없음'}`;
                 joinModalPhone.textContent = `전화번호: ${reservation.creatorPhone || '알 수 없음'}`;
                 joinModalCapacity.textContent = `인원: ${reservation.participants.length} / ${reservation.capacity}`;
-                
+
                 joinEventBtn.classList.add('hidden');
                 cancelJoinBtn.classList.add('hidden');
                 deleteEventBtn.classList.add('hidden');
@@ -418,28 +437,23 @@
             }
         });
 
-        // Modal Button Actions
+        // 모달 버튼들
         cancelReserveBtn.addEventListener('click', () => hideModal(reserveModal));
         cancelJoinModalBtn.addEventListener('click', () => hideModal(joinModal));
 
         confirmReserveBtn.addEventListener('click', async () => {
             const { slotId } = selectedSlotInfo;
             const capacity = reserveCapacityInput.value;
-            if (capacity < 1) {
-                showAlert("최소 인원은 1명입니다.");
-                return;
-            }
+            if (capacity < 1) { showAlert("최소 인원은 1명입니다."); return; }
             showLoader();
             try {
-                const response = await fetch('/api/reservations/create', {
+                const response = await authedFetch('/api/reservations/create', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ slotId, capacity })
                 });
                 const result = await response.json();
-                if (response.ok) {
-                    await fetchReservations();
-                }
+                if (response.ok) { await fetchReservations(); }
                 showAlert(result.message);
             } catch (error) {
                 showAlert("네트워크 오류가 발생했습니다.");
@@ -454,15 +468,13 @@
             const { slotId } = selectedSlotInfo;
             showLoader();
             try {
-                const response = await fetch('/api/reservations/update', {
+                const response = await authedFetch('/api/reservations/update', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'join', slotId })
                 });
                 const result = await response.json();
-                if (response.ok) {
-                    await fetchReservations();
-                }
+                if (response.ok) { await fetchReservations(); }
                 showAlert(result.message);
             } catch (error) {
                 showAlert("네트워크 오류가 발생했습니다.");
@@ -477,15 +489,13 @@
             const { slotId } = selectedSlotInfo;
             showLoader();
             try {
-                const response = await fetch('/api/reservations/update', {
+                const response = await authedFetch('/api/reservations/update', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'cancel', slotId })
                 });
                 const result = await response.json();
-                if (response.ok) {
-                    await fetchReservations();
-                }
+                if (response.ok) { await fetchReservations(); }
                 showAlert(result.message);
             } catch (error) {
                 showAlert("네트워크 오류가 발생했습니다.");
@@ -494,21 +504,19 @@
                 hideLoader();
             }
         });
-        
+
         deleteEventBtn.addEventListener('click', async () => {
             if (!selectedSlotInfo) return;
             const { slotId } = selectedSlotInfo;
             showLoader();
             try {
-                const response = await fetch('/api/reservations/delete', {
+                const response = await authedFetch('/api/reservations/delete', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ slotId })
                 });
                 const result = await response.json();
-                if (response.ok) {
-                    await fetchReservations();
-                }
+                if (response.ok) { await fetchReservations(); }
                 showAlert(result.message);
             } catch (error) {
                 showAlert("네트워크 오류가 발생했습니다.");
@@ -517,11 +525,14 @@
                 hideLoader();
             }
         });
-        
+
+        // 세션 체크 (토큰 있으면 바로 사용자 정보 확인)
         const checkSessionAndLoadData = async () => {
             showLoader();
             try {
-                const response = await fetch('/api/user_info');
+                const token = getToken();
+                if (!token) { showAuthView(); return; }
+                const response = await authedFetch('/api/user_info');
                 if (response.ok) {
                     const userInfo = await response.json();
                     currentUser = userInfo;
