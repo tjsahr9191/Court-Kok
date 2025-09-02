@@ -75,69 +75,190 @@
 
 {% block scripts %}
 <script>
-// =================================================================
-// This script block is for header functionality (Logout, User Menu)
-// The page content is rendered server-side by Jinja2
-// =================================================================
+    document.addEventListener('DOMContentLoaded', () => {
 
-// DOM ELEMENTS
-const userNameDisplay = document.getElementById('user-name-display');
-const logoutBtn = document.getElementById('logout-btn');
-const userMenu = document.getElementById('user-menu');
-const userMenuDropdown = document.getElementById('user-menu-dropdown');
+        // =================================================================
+        // UI ELEMENTS
+        // =================================================================
+        const createdEventsContainer = document.getElementById('created-events-container');
+        const attendedEventsContainer = document.getElementById('attended-events-container');
+        const userNameDisplay = document.getElementById('user-name-display');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userMenu = document.getElementById('user-menu');
+        const userMenuDropdown = document.getElementById('user-menu-dropdown');
 
-// AUTH & API HELPERS
-const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
+        // =================================================================
+        // AUTH & API HELPERS
+        // =================================================================
+        const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
 
-const authedFetch = async (url, options = {}) => {
-    const res = await fetch(url, { ...options, headers: { ...options.headers, ...authHeaders() } });
-    if (res.status === 401 || res.status === 422) {
-        clearToken();
-        window.location.href = '/login';
-        throw new Error('Unauthorized');
-    }
-    return res;
-};
+        const authedFetch = async (url, options = {}) => {
+            const res = await fetch(url, { ...options, headers: { ...options.headers, ...authHeaders() } });
+            if (res.status === 401 || res.status === 422) {
+                clearToken();
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            return res;
+        };
 
-const handleLogout = async () => {
-    showLoader();
-    try {
-        await authedFetch('/api/logout', { method: 'POST' });
-    } catch (error) {
-        console.error("Logout failed:", error);
-    } finally {
-        clearToken();
-        window.location.href = '/login';
-        hideLoader();
-    }
-};
+        const handleLogout = async () => {
+            showLoader();
+            try {
+                await authedFetch('/api/logout', { method: 'POST' });
+            } catch (error) {
+                console.error("Logout failed:", error);
+            } finally {
+                clearToken();
+                window.location.href = '/login';
+                hideLoader();
+            }
+        };
 
-// INITIALIZATION
-window.addEventListener('DOMContentLoaded', async () => {
-    if (!getToken()) {
-        window.location.href = '/login';
-        return;
-    }
-    showLoader();
-    try {
-        const response = await authedFetch('/api/user_info');
-        if (!response.ok) throw new Error('Failed to fetch user info');
-        const userData = await response.json();
-        userNameDisplay.textContent = userData.userName;
-    } catch (error) {
-        console.error("Initialization failed:", error);
-    } finally {
-        hideLoader();
-    }
+        // =================================================================
+        // WEBSOCKET SETUP & HANDLERS
+        // =================================================================
+        let ws;
+        let reconnectInterval;
 
-    // Attach Event Listeners for header
-    userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
-    logoutBtn.addEventListener('click', handleLogout);
-    document.addEventListener('click', (e) => { 
-        if (!userMenu.contains(e.target)) {
-            userMenuDropdown.classList.add('hidden');
+        const connectWebSocket = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) return;
+
+            const token = getToken();
+            if (!token) {
+                console.error("No JWT token found, cannot connect to WebSocket.");
+                clearToken();
+                window.location.href = '/login';
+                return;
+            }
+
+            ws = new WebSocket(`ws://${window.location.host}/ws?token=${token}`);
+
+            ws.onopen = () => {
+                console.log("WebSocket 연결 성공.");
+                clearInterval(reconnectInterval);
+                // 페이지 로드 시 필요한 정보 요청
+                ws.send(JSON.stringify({ action: "get_user_info" }));
+                ws.send(JSON.stringify({ action: "get_my_registrations" }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWsMessage(data);
+            };
+
+            ws.onclose = () => {
+                console.log("WebSocket 연결 종료.");
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(() => {
+                        console.log("WebSocket 재연결 시도 중...");
+                        connectWebSocket();
+                    }, 5000);
+                }
+            };
+
+            ws.onerror = (err) => {
+                console.error("WebSocket 오류:", err);
+                ws.close();
+            };
+        };
+
+        const handleWsMessage = (data) => {
+            switch (data.type) {
+                case 'user_info':
+                    userNameDisplay.textContent = data.userName;
+                    hideLoader();
+                    break;
+                case 'my_registrations_data':
+                    renderMyRegistrations(data.created_events, data.attended_events);
+                    hideLoader();
+                    break;
+                case 'event_update':
+                    // 다른 사용자가 캘린더에서 이벤트 업데이트하면 '내 등록' 정보도 새로고침
+                    ws.send(JSON.stringify({ action: "get_my_registrations" }));
+                    break;
+            }
+        };
+
+        // =================================================================
+        // UI RENDERING FUNCTIONS
+        // =================================================================
+        function renderMyRegistrations(createdEvents, attendedEvents) {
+            createdEventsContainer.innerHTML = '';
+            attendedEventsContainer.innerHTML = '';
+
+            createdEvents.forEach(event => {
+                const participantsHtml = event.participants_details.map(p =>
+                    `<div class="flex items-center space-x-2 text-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                        </svg>
+                        <span>${p.name} (${p.id}) - ${p.phone}</span>
+                    </div>`
+                ).join('');
+
+                const eventCard = `
+                    <div class="bg-white rounded-lg shadow-md p-4 mb-4 border-l-4 border-blue-500">
+                        <h3 class="text-lg font-semibold text-gray-800">${event.date} at ${event.time}</h3>
+                        <p class="text-sm text-gray-600">(${event.duration}분)</p>
+                        <div class="mt-2 text-gray-700">
+                            <p>참가 인원: ${event.participants.length} / ${event.max_participants}</p>
+                        </div>
+                        <div class="mt-4 border-t pt-4">
+                            <p class="font-medium text-gray-800 mb-2">참가자 목록:</p>
+                            ${participantsHtml}
+                        </div>
+                    </div>
+                `;
+                createdEventsContainer.insertAdjacentHTML('beforeend', eventCard);
+            });
+
+            attendedEvents.forEach(event => {
+                const creatorHtml = `
+                    <div class="flex items-center space-x-2 text-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.665.07-1a6.958 6.958 0 00-1.78-4.57c.32-.497.64-.997.975-1.56a6.993 6.993 0 01-.133 7.03zM10 12a1 1 0 011 1v1h-2v-1a1 1 0 011-1zm-3-1a4 4 0 100 8h6a4 4 0 100-8H7z" />
+                        </svg>
+                        <span>${event.creator_details.name} (${event.creator_details.id}) - ${event.creator_details.phone}</span>
+                    </div>
+                `;
+
+                const eventCard = `
+                    <div class="bg-white rounded-lg shadow-md p-4 mb-4 border-l-4 border-green-500">
+                        <h3 class="text-lg font-semibold text-gray-800">${event.date} at ${event.time}</h3>
+                        <p class="text-sm text-gray-600">(${event.duration}분)</p>
+                        <div class="mt-2 text-gray-700">
+                            <p>참가 인원: ${event.participants.length} / ${event.max_participants}</p>
+                        </div>
+                        <div class="mt-4 border-t pt-4">
+                            <p class="font-medium text-gray-800 mb-2">개설자 정보:</p>
+                            ${creatorHtml}
+                        </div>
+                    </div>
+                `;
+                attendedEventsContainer.insertAdjacentHTML('beforeend', eventCard);
+            });
         }
+
+        // =================================================================
+        // INITIALIZATION & EVENT LISTENERS
+        // =================================================================
+        const init = () => {
+            if (!getToken()) {
+                window.location.href = '/login';
+                return;
+            }
+            showLoader();
+            connectWebSocket();
+
+            userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
+            logoutBtn.addEventListener('click', handleLogout);
+            document.addEventListener('click', (e) => {
+                if (userMenu && !userMenu.contains(e.target)) userMenuDropdown.classList.add('hidden');
+            });
+        };
+
+        init();
     });
-});
 </script>
 {% endblock %}

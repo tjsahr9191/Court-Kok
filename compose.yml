@@ -12,6 +12,8 @@ services:
       - MONGO_PASS=password
     depends_on:
       - mongodb
+    networks:
+      - app-network
 
   # MongoDB 데이터베이스 서비스
   mongodb:
@@ -25,6 +27,35 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=password
+    networks:
+      - app-network
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - flask-app
+    networks:
+      - app-network
+
+  # Grafana 서비스
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
 
 volumes:
   mongodb_data:
+  grafana_data:
+
+networks:
+  app-network:

@@ -19,4 +19,4 @@ EXPOSE 5001
 
 # 컨테이너 시작 시 Gunicorn을 사용하여 Flask 애플리케이션을 실행합니다.
 # 'app:app'은 'app.py' 파일 내의 'app' 변수를 의미합니다.
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--worker-class", "gevent", "--timeout", "120", "-w", "1", "app:app"]

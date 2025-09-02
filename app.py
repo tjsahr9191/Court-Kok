@@ -6,9 +6,18 @@ import json
 from datetime import datetime, timedelta
 import secrets
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity, get_jwt
+from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity, get_jwt, decode_token
+
+from prometheus_flask_exporter import PrometheusMetrics
+from prometheus_client import Gauge
+
+from flask_sock import Sock
 
 app = Flask(__name__)
+
+# --- 프로메테우스 설정 ---
+metrics = PrometheusMetrics(app)
+connected_clients_gauge = Gauge('connected_clients', 'Number of currently connected WebSocket clients')
 
 # --- JWT 설정 ---
 app.config["JWT_SECRET_KEY"] = os.environ.get('JWT_SECRET_KEY', secrets.token_hex(32))
@@ -37,6 +46,34 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
     return jti in BLOCKLIST
 
+# WebSocket 설정
+sock = Sock(app)
+clients = {} # {user_id: [websocket_instance, ...]}
+
+def broadcast_event_update(event_id, message_type="event_update"):
+    """특정 이벤트와 관련된 모든 클라이언트에게 변경 사항을 전송합니다."""
+    # 모든 클라이언트에게 변경사항을 전파하여 UI를 업데이트하도록 함
+    for user_id, user_clients in list(clients.items()):
+        for ws in user_clients:
+            try:
+                ws.send(json.dumps({
+                    "type": message_type,
+                    "eventId": event_id,
+                    "message": "Event updated"
+                }))
+            except Exception as e:
+                print(f"Failed to send to client: {e}")
+                user_clients.remove(ws)
+
+    # 만약 유저가 다수라면 이벤트 참여자에게만 보낼 수도 있습니다. (성능 최적화)
+    # event_doc = db.events.find_one({"_id": ObjectId(event_id)})
+    # if event_doc:
+    #     for user_id_obj in event_doc['participants']:
+    #         user_id_str = str(user_id_obj)
+    #         if user_id_str in clients:
+    #             for ws in clients[user_id_str]:
+    #                 ws.send(json.dumps({"type": "event_update", "eventId": event_id}))
+
 # ===============================================
 # === HTML Page Rendering Routes ================
 # ===============================================
@@ -57,51 +94,9 @@ def signup_page():
 @jwt_required()
 def my_registrations_page():
     """
-    Fetches and displays all events associated with the current user.
-    This includes events they created and events they are attending.
+    my_registrations 페이지를 렌더링하고, 데이터는 웹소켓으로 받습니다.
     """
-    current_user_id = get_jwt_identity()
-    user_id_obj = ObjectId(current_user_id)
-
-    # Find events created by the user
-    created_events_cursor = db.events.find({"creator_id": user_id_obj}).sort("date", 1)
-    created_events_list = []
-    for event in created_events_cursor:
-        # For created events, we need details of all participants
-        participants_details = []
-        for p_id in event.get('participants', []):
-            user = db.users.find_one({"_id": p_id})
-            if user:
-                participants_details.append({
-                    "name": user.get('name'),
-                    "id": user.get('id'),
-                    "phone": user.get('phone')
-                })
-        event['participants_details'] = participants_details
-        created_events_list.append(event)
-    
-    # Find events the user is attending (but did not create)
-    attended_events_cursor = db.events.find({
-        "participants": user_id_obj,
-        "creator_id": {"$ne": user_id_obj}
-    }).sort("date", 1)
-    attended_events_list = []
-    for event in attended_events_cursor:
-        # For attended events, we need details of the creator
-        creator = db.users.find_one({"_id": event['creator_id']})
-        if creator:
-            event['creator_details'] = {
-                "name": creator.get('name'),
-                "id": creator.get('id'),
-                "phone": creator.get('phone')
-            }
-        attended_events_list.append(event)
-
-    return render_template(
-        'my_registrations.html', 
-        created_events=created_events_list, 
-        attended_events=attended_events_list
-    )
+    return render_template('my_registrations.html')
 
 @app.route('/user_page')
 @jwt_required()
@@ -147,128 +142,204 @@ def logout():
     BLOCKLIST.add(jti)
     return jsonify({"status": "success", "message": "로그아웃 성공"}), 200
 
-@app.route('/api/user_info', methods=['GET'])
-@jwt_required()
-def get_user_info():
-    current_user_id = get_jwt_identity()
-    user = db.users.find_one({"_id": ObjectId(current_user_id)})
-    if user:
-        return jsonify({
-            "status": "success", "userId": str(user['_id']), "userName": user['name'],
-            "userPhone": user['phone'], "userIdName": user['id']
-        }), 200
-    return jsonify({"status": "error", "message": "사용자를 찾을 수 없습니다."}), 404
-
 # ===============================================
-# ======== CALENDAR API Endpoints ===============
+# ========= WEBSOCKET API Endpoints =============
 # ===============================================
 
-@app.route('/api/events', methods=['GET'])
-@jwt_required()
-def get_events():
-    """Fetches events for a given date."""
-    date_str = request.args.get('date')
-    if not date_str:
-        return jsonify({"status": "error", "message": "Date parameter is required"}), 400
+@sock.route('/ws')
+def websocket_api(ws):
+    # JWT 토큰을 쿼리 파라미터에서 가져옴
+    token = request.args.get('token')
+    if not token:
+        ws.close()
+        return
 
     try:
-        events_cursor = db.events.find({"date": date_str})
-        events_list = []
-        for event in events_cursor:
-            creator_info = db.users.find_one({"_id": event['creator_id']})
-            event_data = {
-                "id": str(event['_id']),
-                "time": event['time'],
-                "duration": event['duration'],
-                "min": event['min_participants'],
-                "max": event['max_participants'],
-                "current": len(event['participants']),
-                "creator": {
-                    "id": creator_info.get('id', 'N/A'),
-                    "phone": creator_info.get('phone', 'N/A')
-                }
-            }
-            events_list.append(event_data)
-        return jsonify({"status": "success", "events": events_list}), 200
+        # JWT 토큰 디코딩 및 검증
+        decoded_token = decode_token(token)
+        current_user_id = decoded_token['sub']
+        user_id_obj = ObjectId(current_user_id)
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        print(f"Token validation failed: {e}")
+        ws.close()
+        return
 
-@app.route('/api/events', methods=['POST'])
-@jwt_required()
-def create_event():
-    """Creates a new event."""
-    current_user_id = get_jwt_identity()
-    user_id_obj = ObjectId(current_user_id)
+    # 이후 로직은 기존과 동일
+    if current_user_id not in clients:
+        clients[current_user_id] = []
+    clients[current_user_id].append(ws)
 
-    data = request.json
-    date_str = data.get('date')
-    time_str = data.get('time')
-    duration = data.get('duration')
-    min_participants = data.get('min_participants')
-    max_participants = data.get('max_participants')
-
-    if not all([date_str, time_str, duration, min_participants, max_participants]):
-        return jsonify({"status": "error", "message": "All fields are required."}), 400
-    
-    # --- Collision Detection ---
-    new_event_start = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-    new_event_end = new_event_start + timedelta(minutes=duration)
-
-    existing_events = db.events.find({"date": date_str})
-    for event in existing_events:
-        existing_start = datetime.strptime(f"{event['date']} {event['time']}", "%Y-%m-%d %H:%M")
-        existing_end = existing_start + timedelta(minutes=event['duration'])
-        # Check for overlap: (StartA < EndB) and (EndA > StartB)
-        if new_event_start < existing_end and new_event_end > existing_start:
-            return jsonify({"status": "error", "message": "Time slot is already booked or overlaps with another event."}), 409
-
-    event_doc = {
-        "date": date_str,
-        "time": time_str,
-        "duration": duration,
-        "min_participants": min_participants,
-        "max_participants": max_participants,
-        "creator_id": user_id_obj,
-        "participants": [user_id_obj],  # Creator is the first participant
-        "created_at": datetime.utcnow()
-    }
-    db.events.insert_one(event_doc)
-    return jsonify({"status": "success", "message": "Event created successfully."}), 201
-
-
-@app.route('/api/events/<event_id>/signup', methods=['POST'])
-@jwt_required()
-def signup_for_event(event_id):
-    """Signs up the current user for an event."""
-    current_user_id = get_jwt_identity()
-    user_id_obj = ObjectId(current_user_id)
-    
     try:
-        event_id_obj = ObjectId(event_id)
-    except:
-        return jsonify({"status": "error", "message": "Invalid event ID format."}), 400
+        # 연결 직후 사용자 정보 전송
+        user = db.users.find_one({"_id": user_id_obj})
+        if user:
+            user_info = {
+                "type": "user_info",
+                "userId": str(user['_id']),
+                "userName": user['name'],
+                "userPhone": user['phone'],
+                "userIdName": user['id']
+            }
+            ws.send(json.dumps(user_info))
 
-    event = db.events.find_one({"_id": event_id_obj})
-    if not event:
-        return jsonify({"status": "error", "message": "Event not found."}), 404
+        while True:
+            message = ws.receive()
+            data = json.loads(message)
+            action = data.get('action')
 
-    # --- Validation Checks ---
-    if len(event['participants']) >= event['max_participants']:
-        return jsonify({"status": "error", "message": "Event is already full."}), 409
-    if user_id_obj in event['participants']:
-        return jsonify({"status": "error", "message": "You are already signed up for this event."}), 409
+            if action == 'get_events':
+                date_str = data.get('date')
+                if not date_str:
+                    ws.send(json.dumps({"type": "error", "message": "Date parameter is required"}))
+                    continue
 
-    # --- Add user to participants list ---
-    db.events.update_one(
-        {"_id": event_id_obj},
-        {"$push": {"participants": user_id_obj}}
-    )
-    return jsonify({"status": "success", "message": "Successfully signed up for the event."}), 200
+                try:
+                    events_cursor = db.events.find({"date": date_str})
+                    events_list = []
+                    for event in events_cursor:
+                        creator_info = db.users.find_one({"_id": event['creator_id']})
+                        event_data = {
+                            "id": str(event['_id']),
+                            "time": event['time'],
+                            "duration": event['duration'],
+                            "min": event['min_participants'],
+                            "max": event['max_participants'],
+                            "current": len(event['participants']),
+                            "creator": {
+                                "id": creator_info.get('id', 'N/A'),
+                                "phone": creator_info.get('phone', 'N/A')
+                            }
+                        }
+                        events_list.append(event_data)
+                    ws.send(json.dumps({"type": "events_list", "events": events_list}))
+                except Exception as e:
+                    ws.send(json.dumps({"type": "error", "message": str(e)}))
+
+            elif action == 'create_event':
+                date_str = data.get('date')
+                time_str = data.get('time')
+                duration = data.get('duration')
+                min_participants = data.get('min_participants')
+                max_participants = data.get('max_participants')
+
+                if not all([date_str, time_str, duration, min_participants, max_participants]):
+                    ws.send(json.dumps({"type": "error", "message": "모든 필드를 채워주세요."}))
+                    continue
+
+                new_event_start = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+                new_event_end = new_event_start + timedelta(minutes=duration)
+
+                existing_events = db.events.find({"date": date_str})
+                is_overlap = False
+                for event in existing_events:
+                    existing_start = datetime.strptime(f"{event['date']} {event['time']}", "%Y-%m-%d %H:%M")
+                    existing_end = existing_start + timedelta(minutes=event['duration'])
+                    if new_event_start < existing_end and new_event_end > existing_start:
+                        is_overlap = True
+                        break
+                if is_overlap:
+                    ws.send(json.dumps({"type": "error", "message": "시간대가 이미 예약되었거나 다른 이벤트와 겹칩니다."}))
+                    continue
+
+                event_doc = {
+                    "date": date_str,
+                    "time": time_str,
+                    "duration": duration,
+                    "min_participants": min_participants,
+                    "max_participants": max_participants,
+                    "creator_id": user_id_obj,
+                    "participants": [user_id_obj],
+                    "created_at": datetime.utcnow()
+                }
+                result = db.events.insert_one(event_doc)
+                ws.send(json.dumps({"type": "success", "message": "이벤트가 성공적으로 생성되었습니다."}))
+                broadcast_event_update(str(result.inserted_id))
+
+            elif action == 'signup_for_event':
+                event_id = data.get('eventId')
+                try:
+                    event_id_obj = ObjectId(event_id)
+                except:
+                    ws.send(json.dumps({"type": "error", "message": "유효하지 않은 이벤트 ID입니다."}))
+                    continue
+
+                event = db.events.find_one({"_id": event_id_obj})
+                if not event:
+                    ws.send(json.dumps({"type": "error", "message": "이벤트를 찾을 수 없습니다."}))
+                    continue
+
+                if len(event['participants']) >= event['max_participants']:
+                    ws.send(json.dumps({"type": "error", "message": "이벤트가 이미 가득 찼습니다."}))
+                    continue
+                if user_id_obj in event['participants']:
+                    ws.send(json.dumps({"type": "error", "message": "이미 이 이벤트에 참여 중입니다."}))
+                    continue
+
+                db.events.update_one(
+                    {"_id": event_id_obj},
+                    {"$push": {"participants": user_id_obj}}
+                )
+                ws.send(json.dumps({"type": "success", "message": "이벤트에 성공적으로 참여했습니다."}))
+                broadcast_event_update(event_id)
+
+            elif action == 'get_my_registrations':
+                # '내 등록' 페이지 로드 시 호출
+                created_events_cursor = db.events.find({"creator_id": user_id_obj}).sort("date", 1)
+                created_events_list = []
+                for event in created_events_cursor:
+                    participants_details = []
+                    for p_id in event.get('participants', []):
+                        user = db.users.find_one({"_id": p_id})
+                        if user:
+                            participants_details.append({
+                                "name": user.get('name'),
+                                "id": user.get('id'),
+                                "phone": user.get('phone')
+                            })
+                    event['_id'] = str(event['_id'])
+                    event['creator_id'] = str(event['creator_id'])
+                    event['participants'] = [str(p_id) for p_id in event['participants']]
+                    event['participants_details'] = participants_details
+                    created_events_list.append(event)
+
+                attended_events_cursor = db.events.find({
+                    "participants": user_id_obj,
+                    "creator_id": {"$ne": user_id_obj}
+                }).sort("date", 1)
+                attended_events_list = []
+                for event in attended_events_cursor:
+                    creator = db.users.find_one({"_id": event['creator_id']})
+                    if creator:
+                        event['creator_details'] = {
+                            "name": creator.get('name'),
+                            "id": creator.get('id'),
+                            "phone": creator.get('phone')
+                        }
+                    event['_id'] = str(event['_id'])
+                    event['creator_id'] = str(event['creator_id'])
+                    event['participants'] = [str(p_id) for p_id in event['participants']]
+                    attended_events_list.append(event)
+
+                ws.send(json.dumps({
+                    "type": "my_registrations_data",
+                    "created_events": created_events_list,
+                    "attended_events": attended_events_list
+                }))
+
+    except Exception as e:
+        print(f"WebSocket Error for user {current_user_id}: {e}")
+    finally:
+        if current_user_id in clients and ws in clients[current_user_id]:
+            clients[current_user_id].remove(ws)
+            if not clients[current_user_id]:
+                del clients[current_user_id]
+        print(f"Connection closed for user {current_user_id}. Active users: {len(clients)}")
 
 # ===============================================
 # ===============================================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
+    # debug=True는 개발용이며, 웹소켓과 함께 사용할 때 문제가 될 수 있습니다.
+    # production 환경에서는 False로 설정하세요.
     app.run(host='0.0.0.0', port=port, debug=True)
-

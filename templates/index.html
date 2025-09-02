@@ -19,111 +19,191 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', () => {
 
-    // =================================================================
-    // PAGE-SPECIFIC DOM ELEMENTS
-    // =================================================================
-    const userNameDisplay = document.getElementById('user-name-display');
-    const logoutBtn = document.getElementById('logout-btn');
-    const userMenu = document.getElementById('user-menu');
-    const userMenuDropdown = document.getElementById('user-menu-dropdown');
+        // =================================================================
+        // PAGE-SPECIFIC DOM ELEMENTS
+        // =================================================================
+        const userNameDisplay = document.getElementById('user-name-display');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userMenu = document.getElementById('user-menu');
+        const userMenuDropdown = document.getElementById('user-menu-dropdown');
 
-    const calendarGrid = document.getElementById('calendar-grid');
-    const currentMonthYearDisplay = document.getElementById('current-month-year');
-    const prevMonthBtn = document.getElementById('prev-month-btn');
-    const nextMonthBtn = document.getElementById('next-month-btn');
+        const calendarGrid = document.getElementById('calendar-grid');
+        const currentMonthYearDisplay = document.getElementById('current-month-year');
+        const prevMonthBtn = document.getElementById('prev-month-btn');
+        const nextMonthBtn = document.getElementById('next-month-btn');
 
-    const dailyScheduleContainer = document.getElementById('daily-schedule-container');
-    const scheduleDateDisplay = document.getElementById('schedule-date');
-    const scheduleSlotsContainer = document.getElementById('schedule-slots');
+        const dailyScheduleContainer = document.getElementById('daily-schedule-container');
+        const scheduleDateDisplay = document.getElementById('schedule-date');
+        const scheduleSlotsContainer = document.getElementById('schedule-slots');
 
-    const eventDetailsContainer = document.getElementById('event-details-container');
-    const createEventView = document.getElementById('create-event-view');
-    const viewEventAvailable = document.getElementById('view-event-available');
-    const viewEventFull = document.getElementById('view-event-full');
-    const durationOptions = document.getElementById('duration-options');
-    const createEventBtn = document.getElementById('create-event-submit-btn');
-    const signupEventBtn = document.getElementById('signup-event-btn');
+        const eventDetailsContainer = document.getElementById('event-details-container');
+        const createEventView = document.getElementById('create-event-view');
+        const viewEventAvailable = document.getElementById('view-event-available');
+        const viewEventFull = document.getElementById('view-event-full');
+        const durationOptions = document.getElementById('duration-options');
+        const createEventBtn = document.getElementById('create-event-submit-btn');
+        const signupEventBtn = document.getElementById('signup-event-btn');
 
-    // =================================================================
-    // STATE MANAGEMENT
-    // =================================================================
-    let currentDate = new Date();
-    let selectedDate = null;
-    let selectedTimeSlot = null;
-    let selectedDuration = null;
-    let selectedEventId = null;
+        // =================================================================
+        // STATE MANAGEMENT
+        // =================================================================
+        let currentDate = new Date();
+        let selectedDate = null;
+        let selectedTimeSlot = null;
+        let selectedDuration = null;
+        let selectedEventId = null;
 
-    // =================================================================
-    // AUTH & API HELPERS
-    // =================================================================
-    const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
+        // =================================================================
+        // AUTH & API HELPERS
+        // =================================================================
+        const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
 
-    const authedFetch = async (url, options = {}) => {
-        const res = await fetch(url, { ...options, headers: { ...options.headers, ...authHeaders() } });
-        if (res.status === 401 || res.status === 422) {
-            clearToken();
-            window.location.href = '/login';
-            throw new Error('Unauthorized');
+        const authedFetch = async (url, options = {}) => {
+            const res = await fetch(url, { ...options, headers: { ...options.headers, ...authHeaders() } });
+            if (res.status === 401 || res.status === 422) {
+                clearToken();
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            return res;
+        };
+
+        const handleLogout = async () => {
+            showLoader();
+            try {
+                await authedFetch('/api/logout', { method: 'POST' });
+            } catch (error) {
+                console.error("Logout failed:", error);
+            } finally {
+                clearToken();
+                window.location.href = '/login';
+                hideLoader();
+            }
+        };
+
+        // =================================================================
+        // WEBSOCKET SETUP
+        // =================================================================
+        let ws = null;
+        let reconnectInterval;
+
+        const connectWebSocket = () => {
+            // 함수 시작 부분에 토큰 유효성 검사
+            const token = getToken();
+            if (!token) {
+                console.error("No JWT token found, cannot connect to WebSocket.");
+                clearToken();
+                window.location.href = '/login';
+                return;
+            }
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return;
+            }
+
+            ws = new WebSocket(`ws://${window.location.host}/ws?token=${token}`);
+
+            ws.onopen = () => {
+                console.log("WebSocket 연결 성공.");
+                clearInterval(reconnectInterval);
+                // 페이지 로드 시 필요한 초기 정보 요청
+                ws.send(JSON.stringify({ action: "get_user_info" }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWsMessage(data);
+            };
+
+            ws.onclose = () => {
+                console.log("WebSocket 연결 종료.");
+                // 5초 후 재연결 시도
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(() => {
+                        console.log("WebSocket 재연결 시도 중...");
+                        connectWebSocket();
+                    }, 5000);
+                }
+            };
+
+            ws.onerror = (err) => {
+                console.error("WebSocket 오류:", err);
+                ws.close();
+            };
+        };
+
+        const handleWsMessage = (data) => {
+            switch (data.type) {
+                case 'user_info':
+                    userNameDisplay.textContent = data.userName;
+                    hideLoader();
+                    break;
+                case 'events_list':
+                    renderDailyScheduleContent(data.events);
+                    hideLoader();
+                    break;
+                case 'event_update':
+                    // 다른 사용자가 이벤트를 생성/참여하면 캘린더를 새로고침
+                    if(selectedDate) {
+                        renderDailySchedule(selectedDate);
+                    }
+                    break;
+                case 'success':
+                    showAlert(data.message);
+                    break;
+                case 'error':
+                    showAlert(data.message);
+                    break;
+            }
+        };
+
+        // =================================================================
+        // UI RENDERING FUNCTIONS
+        // =================================================================
+        function renderCalendar(date) {
+            if (!calendarGrid || !currentMonthYearDisplay) return;
+            calendarGrid.innerHTML = '';
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            currentMonthYearDisplay.textContent = `${year}년 ${month + 1}월`;
+
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
+
+            for (let i = 0; i < firstDayOfMonth; i++) calendarGrid.insertAdjacentHTML('beforeend', `<div></div>`);
+
+            for (let day = 1; day <= lastDateOfMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const today = new Date();
+                const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+                const todayClass = isToday ? 'bg-blue-500 text-white font-bold' : 'hover:bg-gray-100';
+                const cell = `<div class="date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg ${todayClass}" data-date="${dateStr}">${day}</div>`;
+                calendarGrid.insertAdjacentHTML('beforeend', cell);
+            }
         }
-        return res;
-    };
 
-    const handleLogout = async () => {
-        showLoader();
-        try {
-            await authedFetch('/api/logout', { method: 'POST' });
-        } catch (error) {
-            console.error("Logout failed:", error);
-        } finally {
-            clearToken();
-            window.location.href = '/login';
-            hideLoader();
+        async function renderDailySchedule(dateStr) {
+            showLoader();
+            scheduleDateDisplay.textContent = dateStr;
+            scheduleSlotsContainer.innerHTML = '';
+
+            // 웹소켓으로 이벤트 데이터 요청
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ action: "get_events", date: dateStr }));
+            } else {
+                showAlert("WebSocket is not connected. Please refresh the page.");
+                hideLoader();
+            }
         }
-    };
 
-    // =================================================================
-    // UI RENDERING FUNCTIONS
-    // =================================================================
-    function renderCalendar(date) {
-        if (!calendarGrid || !currentMonthYearDisplay) return;
-        calendarGrid.innerHTML = '';
-        const year = date.getFullYear();
-        const month = date.getMonth();
-        currentMonthYearDisplay.textContent = `${year}년 ${month + 1}월`;
-
-        const firstDayOfMonth = new Date(year, month, 1).getDay();
-        const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
-        
-        for (let i = 0; i < firstDayOfMonth; i++) calendarGrid.insertAdjacentHTML('beforeend', `<div></div>`);
-
-        for (let day = 1; day <= lastDateOfMonth; day++) {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const today = new Date();
-            const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
-            const todayClass = isToday ? 'bg-blue-500 text-white font-bold' : 'hover:bg-gray-100';
-            const cell = `<div class="date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg ${todayClass}" data-date="${dateStr}">${day}</div>`;
-            calendarGrid.insertAdjacentHTML('beforeend', cell);
-        }
-    }
-
-    async function renderDailySchedule(dateStr) {
-        showLoader();
-        scheduleDateDisplay.textContent = dateStr;
-        scheduleSlotsContainer.innerHTML = '';
-        
-        try {
-            const response = await authedFetch(`/api/events?date=${dateStr}`);
-            if (!response.ok) throw new Error('Failed to fetch events.');
-            const data = await response.json();
-            const events = data.events || [];
-
+        function renderDailyScheduleContent(events) {
             const eventMap = new Map();
             events.forEach(event => {
                 const startTime = event.time;
                 for (let i = 0; i < event.duration; i += 30) {
-                    const slotDate = new Date(`${dateStr}T${startTime}:00`);
+                    const slotDate = new Date(`${selectedDate}T${startTime}:00`);
                     slotDate.setMinutes(slotDate.getMinutes() + i);
                     const slotTime = `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}`;
                     eventMap.set(slotTime, { isStart: i === 0, event: event });
@@ -154,151 +234,139 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     const slot = `<div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer"
-                                     data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'>${slotText}</div>`;
+                                 data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'>${slotText}</div>`;
                     scheduleSlotsContainer.insertAdjacentHTML('beforeend', slot);
                 }
             }
-        } catch (error) {
-            console.error("Error fetching events:", error);
-            showAlert("Failed to load schedule. Please try again.");
-        } finally {
-            hideLoader();
         }
-    }
 
-    function showEventDetailView(viewToShow) {
-        createEventView.classList.add('hidden');
-        viewEventAvailable.classList.add('hidden');
-        viewEventFull.classList.add('hidden');
-        eventDetailsContainer.classList.toggle('hidden', viewToShow === 'none');
+        function showEventDetailView(viewToShow) {
+            createEventView.classList.add('hidden');
+            viewEventAvailable.classList.add('hidden');
+            viewEventFull.classList.add('hidden');
+            eventDetailsContainer.classList.toggle('hidden', viewToShow === 'none');
 
-        if (viewToShow === 'create') createEventView.classList.remove('hidden');
-        else if (viewToShow === 'available') viewEventAvailable.classList.remove('hidden');
-        else if (viewToShow === 'full') viewEventFull.classList.remove('hidden');
-    }
+            if (viewToShow === 'create') createEventView.classList.remove('hidden');
+            else if (viewToShow === 'available') viewEventAvailable.classList.remove('hidden');
+            else if (viewToShow === 'full') viewEventFull.classList.remove('hidden');
+        }
 
-    // =================================================================
-    // EVENT HANDLERS
-    // =================================================================
-    function handleDateClick(e) {
-        const cell = e.target.closest('.date-cell');
-        if (!cell) return;
-        document.querySelector('.date-cell.bg-blue-200')?.classList.remove('bg-blue-200', 'text-white');
-        cell.classList.add('bg-blue-200', 'text-white');
-        selectedDate = cell.dataset.date;
-        dailyScheduleContainer.classList.remove('hidden');
-        showEventDetailView('none');
-        renderDailySchedule(selectedDate);
-    }
-    
-    function handleTimeSlotClick(e) {
-        const slot = e.target.closest('.time-slot');
-        if (!slot) return;
-        selectedTimeSlot = slot.dataset.time;
-        const slotType = slot.dataset.type;
-        const eventData = JSON.parse(slot.dataset.event);
-        selectedEventId = eventData.id || null;
+        // =================================================================
+        // EVENT HANDLERS
+        // =================================================================
+        function handleDateClick(e) {
+            const cell = e.target.closest('.date-cell');
+            if (!cell) return;
+            document.querySelector('.date-cell.bg-blue-200')?.classList.remove('bg-blue-200', 'text-white');
+            cell.classList.add('bg-blue-200', 'text-white');
+            selectedDate = cell.dataset.date;
+            dailyScheduleContainer.classList.remove('hidden');
+            showEventDetailView('none');
+            renderDailySchedule(selectedDate);
+        }
 
-        if (slotType === 'empty') {
-            showEventDetailView('create');
-            document.getElementById('create-event-date-time').textContent = `${selectedDate} at ${selectedTimeSlot}`;
-            const allSlots = Array.from(scheduleSlotsContainer.querySelectorAll('.time-slot'));
-            const clickedSlotIndex = allSlots.findIndex(s => s.dataset.time === selectedTimeSlot);
-            let consecutiveEmptySlots = 0;
-            for (let i = clickedSlotIndex; i < allSlots.length; i++) {
-                if (allSlots[i].dataset.type === 'empty') consecutiveEmptySlots++;
-                else break;
-            }
-            const availableMinutes = consecutiveEmptySlots * 30;
-            document.querySelectorAll('.duration-btn').forEach(btn => {
-                const duration = parseInt(btn.dataset.duration, 10);
-                btn.disabled = duration > availableMinutes;
-                btn.classList.toggle('opacity-40', duration > availableMinutes);
-                btn.classList.toggle('cursor-not-allowed', duration > availableMinutes);
-                btn.classList.toggle('bg-gray-100', duration > availableMinutes);
-            });
-            selectedDuration = null;
-            document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
-        } else {
-            const endTime = new Date(`${selectedDate}T${eventData.time}`);
-            endTime.setMinutes(endTime.getMinutes() + eventData.duration);
-            const endTimeStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-            const timeDisplay = `${eventData.time} - ${endTimeStr} (${eventData.duration} min)`;
-            const participantsDisplay = `${eventData.current} / ${eventData.max}`;
-            const creatorIdDisplay = eventData.creator.id;
-            const creatorContactDisplay = eventData.creator.phone;
+        function handleTimeSlotClick(e) {
+            const slot = e.target.closest('.time-slot');
+            if (!slot) return;
+            selectedTimeSlot = slot.dataset.time;
+            const slotType = slot.dataset.type;
+            const eventData = JSON.parse(slot.dataset.event);
+            selectedEventId = eventData.id || null;
 
-            if (slotType === 'available') {
-                showEventDetailView('available');
-                document.getElementById('view-available-date').textContent = selectedDate;
-                document.getElementById('view-available-time').textContent = timeDisplay;
-                document.getElementById('view-available-participants').textContent = participantsDisplay;
-                document.getElementById('view-available-creator-id').textContent = creatorIdDisplay;
-                document.getElementById('view-available-creator-contact').textContent = creatorContactDisplay;
-            } else if (slotType === 'full') {
-                showEventDetailView('full');
-                document.getElementById('view-full-date').textContent = selectedDate;
-                document.getElementById('view-full-time').textContent = timeDisplay;
-                document.getElementById('view-full-participants').textContent = participantsDisplay;
-                document.getElementById('view-full-creator-id').textContent = creatorIdDisplay;
-                document.getElementById('view-full-creator-contact').textContent = creatorContactDisplay;
+            if (slotType === 'empty') {
+                showEventDetailView('create');
+                document.getElementById('create-event-date-time').textContent = `${selectedDate} at ${selectedTimeSlot}`;
+                const allSlots = Array.from(scheduleSlotsContainer.querySelectorAll('.time-slot'));
+                const clickedSlotIndex = allSlots.findIndex(s => s.dataset.time === selectedTimeSlot);
+                let consecutiveEmptySlots = 0;
+                for (let i = clickedSlotIndex; i < allSlots.length; i++) {
+                    if (allSlots[i].dataset.type === 'empty') consecutiveEmptySlots++;
+                    else break;
+                }
+                const availableMinutes = consecutiveEmptySlots * 30;
+                document.querySelectorAll('.duration-btn').forEach(btn => {
+                    const duration = parseInt(btn.dataset.duration, 10);
+                    btn.disabled = duration > availableMinutes;
+                    btn.classList.toggle('opacity-40', duration > availableMinutes);
+                    btn.classList.toggle('cursor-not-allowed', duration > availableMinutes);
+                    btn.classList.toggle('bg-gray-100', duration > availableMinutes);
+                });
+                selectedDuration = null;
+                document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+            } else {
+                const endTime = new Date(`${selectedDate}T${eventData.time}`);
+                endTime.setMinutes(endTime.getMinutes() + eventData.duration);
+                const endTimeStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+                const timeDisplay = `${eventData.time} - ${endTimeStr} (${eventData.duration} min)`;
+                const participantsDisplay = `${eventData.current} / ${eventData.max}`;
+                const creatorIdDisplay = eventData.creator.id;
+                const creatorContactDisplay = eventData.creator.phone;
+
+                if (slotType === 'available') {
+                    showEventDetailView('available');
+                    document.getElementById('view-available-date').textContent = selectedDate;
+                    document.getElementById('view-available-time').textContent = timeDisplay;
+                    document.getElementById('view-available-participants').textContent = participantsDisplay;
+                    document.getElementById('view-available-creator-id').textContent = creatorIdDisplay;
+                    document.getElementById('view-available-creator-contact').textContent = creatorContactDisplay;
+                } else if (slotType === 'full') {
+                    showEventDetailView('full');
+                    document.getElementById('view-full-date').textContent = selectedDate;
+                    document.getElementById('view-full-time').textContent = timeDisplay;
+                    document.getElementById('view-full-participants').textContent = participantsDisplay;
+                    document.getElementById('view-full-creator-id').textContent = creatorIdDisplay;
+                    document.getElementById('view-full-creator-contact').textContent = creatorContactDisplay;
+                }
             }
         }
-    }
 
-    async function handleCreateEvent() {
-        if (!selectedDate || !selectedTimeSlot || !selectedDuration) return showAlert("Please select a date, time, and duration.");
-        const minParticipants = document.getElementById('min-participants').value;
-        const maxParticipants = document.getElementById('max-participants').value;
-        if (parseInt(minParticipants) > parseInt(maxParticipants)) return showAlert("Minimum participants cannot be greater than maximum.");
+        function handleCreateEvent() {
+            if (!selectedDate || !selectedTimeSlot || !selectedDuration) return showAlert("Please select a date, time, and duration.");
+            const minParticipants = document.getElementById('min-participants').value;
+            const maxParticipants = document.getElementById('max-participants').value;
+            if (parseInt(minParticipants) > parseInt(maxParticipants)) return showAlert("Minimum participants cannot be greater than maximum.");
 
-        showLoader();
-        try {
-            const response = await authedFetch('/api/events', {
-                method: 'POST',
-                body: JSON.stringify({
-                    date: selectedDate, time: selectedTimeSlot, duration: parseInt(selectedDuration),
-                    min_participants: parseInt(minParticipants), max_participants: parseInt(maxParticipants)
-                })
-            });
-            const result = await response.json();
-            showAlert(result.message);
-            if (response.ok) {
+            const message = {
+                action: 'create_event',
+                date: selectedDate,
+                time: selectedTimeSlot,
+                duration: parseInt(selectedDuration),
+                min_participants: parseInt(minParticipants),
+                max_participants: parseInt(maxParticipants)
+            };
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
                 showEventDetailView('none');
-                await renderDailySchedule(selectedDate);
+            } else {
+                showAlert("WebSocket is not connected. Please refresh the page.");
             }
-        } catch (error) { showAlert("Failed to create event."); } finally { hideLoader(); }
-    }
-
-    async function handleSignupEvent() {
-        if (!selectedEventId) return showAlert("No event selected.");
-        showLoader();
-        try {
-            const response = await authedFetch(`/api/events/${selectedEventId}/signup`, { method: 'POST' });
-            const result = await response.json();
-            showAlert(result.message);
-            if (response.ok) {
-                showEventDetailView('none');
-                await renderDailySchedule(selectedDate);
-            }
-        } catch (error) { showAlert("Failed to sign up."); } finally { hideLoader(); }
-    }
-
-    // =================================================================
-    // INITIALIZATION & EVENT LISTENERS
-    // =================================================================
-    const init = async () => {
-        if (!getToken()) {
-            window.location.href = '/login';
-            return;
         }
-        showLoader();
-        try {
-            const response = await authedFetch('/api/user_info');
-            if (!response.ok) throw new Error('Failed to fetch user info');
-            const userData = await response.json();
-            userNameDisplay.textContent = userData.userName;
-            
+
+        function handleSignupEvent() {
+            if (!selectedEventId) return showAlert("No event selected.");
+            const message = {
+                action: 'signup_for_event',
+                eventId: selectedEventId
+            };
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+                showEventDetailView('none');
+            } else {
+                showAlert("WebSocket is not connected. Please refresh the page.");
+            }
+        }
+
+        // =================================================================
+        // INITIALIZATION & EVENT LISTENERS
+        // =================================================================
+        const init = () => {
+            if (!getToken()) {
+                window.location.href = '/login';
+                return;
+            }
+            showLoader();
+            connectWebSocket();
+
             // Attach Event Listeners
             userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
             logoutBtn.addEventListener('click', handleLogout);
@@ -319,16 +387,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Initial Render
             renderCalendar(currentDate);
+        };
 
-        } catch (error) {
-            console.error("Initialization failed:", error);
-        } finally {
-            hideLoader();
-        }
-    };
-
-    init();
-});
+        init();
+    });
 </script>
 {% endblock %}
+
 

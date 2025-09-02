@@ -2,5 +2,10 @@ Flask
 requests
 pymongo
 gunicorn
+gevent
+gevent-websocket
+prometheus-flask-exporter
+flask_sock
+eventlet
 flask-jwt-extended>=4.6,<5
 PyJWT>=2,<3
