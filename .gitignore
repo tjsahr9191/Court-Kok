@@ -1,9 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
 
-# MongoDB local data
-mongodb_data/
+# OS
+.DS_Store
 
-# MongoDB local data
-mongodb_data/
+# Env
+.env
+.env.*
 
-# MongoDB local data
+# Node (있다면)
+node_modules/
+
+# Logs / builds (있다면)
+*.log
+dist/
+build/
+
+# MongoDB local data (절대 깃에 올리지 않기)
 mongodb_data/
