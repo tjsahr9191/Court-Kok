@@ -19,8 +19,10 @@ jwt = JWTManager(app)
 
 # 환경 변수에서 MongoDB 호스트를 가져오도록 수정
 MONGO_HOST = os.environ.get('MONGO_HOST', 'localhost')
+MONGO_USER = os.environ.get('MONGO_USER')
+MONGO_PASS = os.environ.get('MONGO_PASS')
 try:
-    client = MongoClient(f'mongodb://{MONGO_HOST}:27017/')
+    client = MongoClient(f'mongodb://{MONGO_USER}:{MONGO_PASS}@{MONGO_HOST}:27017/')
     db = client.court_kok
     client.admin.command('ping')  # Check connections
     print("Successfully connected to MongoDB.")
@@ -33,20 +35,15 @@ except Exception as e:
 # 메모리에 블록리스트를 저장합니다. 운영 환경에서는 Redis 와 같은 DB 사용을 권장합니다.
 BLOCKLIST = set()
 
-
 @jwt.token_in_blocklist_loader
 def check_if_token_in_blocklist(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
     return jti in BLOCKLIST
 
-
-# ---
-
 @app.route('/')
 def home():
     """Renders the main index.html file for the frontend application."""
     return render_template('index.html')
-
 
 @app.route('/test')
 def test():
