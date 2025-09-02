@@ -14,46 +14,32 @@
             -moz-user-select: none;
             user-select: none;
         }
-        .container {
-            max-width: 900px;
-        }
-        .scroll-container::-webkit-scrollbar {
-            width: 8px;
-        }
+        .container { max-width: 900px; }
+        .scroll-container::-webkit-scrollbar { width: 8px; }
         .scroll-container::-webkit-scrollbar-track {
-            background: #e5e7eb;
-            border-radius: 10px;
+            background: #e5e7eb; border-radius: 10px;
         }
         .scroll-container::-webkit-scrollbar-thumb {
-            background-color: #9ca3af;
-            border-radius: 10px;
-            border: 2px solid #e5e7eb;
+            background-color: #9ca3af; border-radius: 10px; border: 2px solid #e5e7eb;
         }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
 
-    <!-- Flash Messages (for server-side messages) -->
-    <div id="flash-message" class="fixed top-4 right-4 z-50">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-md mb-2">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+    <div id="loading-spinner" class="fixed inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-50 hidden">
+        <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
     </div>
 
     <!-- Login & Signup View -->
-    {% if not logged_in %}
     <div id="auth-view" class="container bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
         <div id="login-form-container">
             <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">로그인</h1>
-            <form id="login-form" class="space-y-4" method="POST" action="{{ url_for('login') }}">
-                <input type="text" id="login-id" name="id" placeholder="아이디" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <input type="password" id="login-pw" name="pw" placeholder="비밀번호" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+            <form id="login-form" class="space-y-4">
+                <input type="text" id="login-id" placeholder="아이디" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <input type="password" id="login-pw" placeholder="비밀번호" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
                 <button type="submit" class="w-full bg-blue-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-blue-700 transition duration-200">로그인</button>
             </form>
             <button id="show-signup-btn" class="w-full mt-4 text-sm text-center text-blue-500 hover:text-blue-700 transition duration-200">회원가입</button>
@@ -61,82 +47,42 @@
 
         <div id="signup-form-container" class="hidden">
             <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">회원가입</h1>
-            <form id="signup-form" class="space-y-4" method="POST" action="{{ url_for('signup') }}">
-                <input type="text" id="signup-name" name="name" placeholder="이름 (한글)" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <input type="text" id="signup-id" name="id" placeholder="아이디" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <input type="password" id="signup-pw" name="pw" placeholder="비밀번호" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <input type="password" id="signup-confirm-pw" name="confirm_pw" placeholder="비밀번호 확인" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <input type="email" id="signup-email" name="email" placeholder="이메일" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <input type="tel" id="signup-phone" name="phone" placeholder="전화번호" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+            <form id="signup-form" class="space-y-4">
+                <input type="text" id="signup-name" placeholder="이름 (한글)" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <input type="text" id="signup-id" placeholder="아이디" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <input type="password" id="signup-pw" placeholder="비밀번호" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <input type="password" id="signup-confirm-pw" placeholder="비밀번호 확인" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <input type="email" id="signup-email" placeholder="이메일" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <input type="tel" id="signup-phone" placeholder="전화번호" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
                 <button type="submit" class="w-full bg-green-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-700 transition duration-200">가입</button>
             </form>
             <button id="show-login-btn" class="w-full mt-4 text-sm text-center text-blue-500 hover:text-blue-700 transition duration-200">로그인으로 돌아가기</button>
         </div>
     </div>
-    {% endif %}
 
     <!-- Main App View -->
-    {% if logged_in %}
-    <div id="main-view" class="container bg-white p-6 rounded-xl shadow-lg w-full">
+    <div id="main-view" class="container bg-white p-6 rounded-xl shadow-lg w-full hidden">
         <div class="flex items-center justify-between mb-4">
-            <h1 id="date-range-header" class="text-xl sm:text-2xl font-bold text-gray-800">
-                {{ week_days[0].strftime('%m.%d(%a)') }} - {{ week_days[6].strftime('%m.%d(%a)') }}
-            </h1>
-            <form action="{{ url_for('logout') }}" method="post" class="inline">
-                <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">로그아웃</button>
-            </form>
+            <h1 id="date-range-header" class="text-xl sm:text-2xl font-bold text-gray-800"></h1>
+            <button id="logout-btn" class="text-sm text-gray-500 hover:text-gray-700">로그아웃</button>
         </div>
-        
+
         <div class="overflow-x-auto scroll-container">
             <table class="min-w-full table-auto border-separate border-spacing-1">
                 <thead class="bg-gray-100">
-                    <tr>
-                        <th class="p-3 text-left font-bold text-sm text-gray-600">시간</th>
-                        {% for day in week_days %}
-                        <th class="p-3 text-center font-bold text-sm text-gray-600">{{ day.strftime('%m.%d(%a)') }}</th>
-                        {% endfor %}
-                    </tr>
+                    <tr id="table-header"></tr>
                 </thead>
-                <tbody>
-                    {% for hour in range(10, 22) %}
-                    <tr>
-                        <td class="p-3 font-medium text-gray-700 text-sm border-b border-gray-200">{{ '{:02d}'.format(hour) }}:00 - {{ '{:02d}'.format(hour+1) }}:00</td>
-                        {% for day in week_days %}
-                        {% set slot_id = day.strftime('%Y-%m-%d') + '-' + hour|string %}
-                        {% set reservation = reservations.get(slot_id) %}
-                        {% set is_creator = reservation and reservation.creatorId == user_info.user_id %}
-                        {% set is_participant = reservation and user_info.user_id in reservation.participants %}
-                        {% set is_full = reservation and reservation.participants|length >= reservation.capacity %}
-                        {% set cell_color = 'bg-gray-400' if not reservation else ('bg-red-500' if is_full else 'bg-blue-500') %}
-                        <td class="p-1 border-b border-gray-200">
-                            <div class="w-full h-10 rounded-lg {{ cell_color }} cursor-pointer transition duration-150 transform hover:scale-105"
-                                 data-slot-id="{{ slot_id }}"
-                                 data-is-reserved="{{ 'true' if reservation else 'false' }}"
-                                 data-is-full="{{ 'true' if is_full else 'false' }}"
-                                 data-is-creator="{{ 'true' if is_creator else 'false' }}"
-                                 data-is-participant="{{ 'true' if is_participant else 'false' }}"
-                                 {% if reservation %}
-                                 data-creator-name="{{ reservation.creatorName }}"
-                                 data-creator-phone="{{ reservation.creatorPhone }}"
-                                 data-capacity="{{ reservation.participants|length }} / {{ reservation.capacity }}"
-                                 {% endif %}>
-                            </div>
-                        </td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <tbody id="schedule-table"></tbody>
             </table>
         </div>
-        
+
         <p class="text-sm text-center text-gray-500 mt-4">
-            <span class="inline-block w-4 h-4 rounded-full bg-gray-400 mr-2"></span>빈 슬롯 / 
-            <span class="inline-block w-4 h-4 rounded-full bg-blue-500 mr-2 ml-2"></span>참여가능 / 
+            <span class="inline-block w-4 h-4 rounded-full bg-gray-400 mr-2"></span>빈 슬롯 /
+            <span class="inline-block w-4 h-4 rounded-full bg-blue-500 mr-2 ml-2"></span>참여가능 /
             <span class="inline-block w-4 h-4 rounded-full bg-red-500 mr-2 ml-2"></span>정원초과
         </p>
         <p class="text-sm text-center text-gray-500 mt-2">블록을 클릭하여 예약하거나 참여하세요.</p>
     </div>
-    {% endif %}
 
     <!-- Modals -->
     <div id="reserve-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-40 hidden">
@@ -144,15 +90,12 @@
             <h2 class="text-xl font-bold text-gray-800 mb-4">예약 생성</h2>
             <p id="reserve-modal-date" class="text-lg font-medium text-gray-700 mb-2"></p>
             <p id="reserve-modal-time" class="text-lg font-medium text-gray-700 mb-4"></p>
-            <form id="reserve-form" method="POST" action="{{ url_for('create_reservation') }}">
-                <input type="hidden" name="slotId" id="reserve-slot-id">
-                <label for="capacity" class="block text-sm font-medium text-gray-700 mb-2">최대 인원</label>
-                <input type="number" id="capacity" name="capacity" min="1" value="10" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4">
-                <div class="flex justify-end space-x-2">
-                    <button type="button" id="cancel-reserve-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">취소</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">예약하기</button>
-                </div>
-            </form>
+            <label for="capacity" class="block text-sm font-medium text-gray-700 mb-2">최대 인원</label>
+            <input type="number" id="capacity" min="1" value="10" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4">
+            <div class="flex justify-end space-x-2">
+                <button id="cancel-reserve-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">취소</button>
+                <button id="confirm-reserve-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">예약하기</button>
+            </div>
         </div>
     </div>
 
@@ -165,120 +108,447 @@
             <p id="join-modal-phone" class="text-sm text-gray-600 mb-4"></p>
             <p id="join-modal-capacity" class="text-sm text-gray-600 mb-4"></p>
             <div class="flex justify-end space-x-2">
-                <form id="join-form" method="POST" action="{{ url_for('join_reservation') }}" class="hidden">
-                    <input type="hidden" name="slotId" id="join-slot-id">
-                    <button type="button" id="cancel-join-modal-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">닫기</button>
-                    <button type="submit" id="join-event-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">참여하기</button>
-                </form>
-                <form id="cancel-form" method="POST" action="{{ url_for('cancel_reservation') }}" class="hidden">
-                    <input type="hidden" name="slotId" id="cancel-slot-id">
-                    <button type="button" id="cancel-join-modal-btn-2" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">닫기</button>
-                    <button type="submit" id="cancel-join-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">취소하기</button>
-                </form>
-                <form id="delete-form" method="POST" action="{{ url_for('delete_reservation') }}" class="hidden">
-                    <input type="hidden" name="slotId" id="delete-slot-id">
-                    <button type="button" id="cancel-join-modal-btn-3" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">닫기</button>
-                    <button type="submit" id="delete-event-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">예약 삭제</button>
-                </form>
+                <button id="cancel-join-modal-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">닫기</button>
+                <button id="join-event-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hidden">참여하기</button>
+                <button id="cancel-join-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 hidden">취소하기</button>
+                <button id="delete-event-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 hidden">예약 삭제</button>
             </div>
         </div>
     </div>
-    
+
+    <div id="alert-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-40 hidden">
+        <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm text-center">
+            <h2 id="alert-message" class="text-lg font-medium text-gray-800 mb-4"></h2>
+            <button id="alert-ok-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">확인</button>
+        </div>
+    </div>
+
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const showSignupBtn = document.getElementById('show-signup-btn');
-            const showLoginBtn = document.getElementById('show-login-btn');
-            const loginFormContainer = document.getElementById('login-form-container');
-            const signupFormContainer = document.getElementById('signup-form-container');
-            const reserveModal = document.getElementById('reserve-modal');
-            const joinModal = document.getElementById('join-modal');
+        // =======================
+        // JWT Utilities (NEW)
+        // =======================
+        const getToken = () => localStorage.getItem('token');
+        const setToken = (t) => localStorage.setItem('token', t);
+        const clearToken = () => localStorage.removeItem('token');
 
-            // Flash message autoclose
-            const flashMessage = document.getElementById('flash-message');
-            if (flashMessage) {
-                setTimeout(() => {
-                    flashMessage.style.display = 'none';
-                }, 5000);
+        const authHeaders = () => {
+            const t = getToken();
+            return t ? { 'Authorization': `Bearer ${t}` } : {};
+        };
+
+        // 공통 fetch 래퍼: 401 처리 일원화
+        const authedFetch = async (url, options = {}) => {
+            const baseHeaders = options.headers || {};
+            const merged = {
+                ...options,
+                headers: { ...baseHeaders, ...authHeaders() }
+            };
+            const res = await fetch(url, merged);
+            if (res.status === 401) {
+                // 토큰 무효/만료/미전달 → 세션 초기화
+                clearToken();
+                currentUser = null;
+                showAuthView();
+                try {
+                    const data = await res.json();
+                    if (data?.message) showAlert(data.message);
+                } catch (_) {}
+                throw new Error('Unauthorized');
             }
+            return res;
+        };
 
-            if (showSignupBtn) {
-                showSignupBtn.addEventListener('click', () => {
-                    loginFormContainer.classList.add('hidden');
-                    signupFormContainer.classList.remove('hidden');
-                });
+        // =======================
+        // Global state
+        // =======================
+        let currentUser = null;
+        let reservations = {};
+
+        // UI Elements
+        const authView = document.getElementById('auth-view');
+        const mainView = document.getElementById('main-view');
+        const loginFormContainer = document.getElementById('login-form-container');
+        const signupFormContainer = document.getElementById('signup-form-container');
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const showSignupBtn = document.getElementById('show-signup-btn');
+        const showLoginBtn = document.getElementById('show-login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const dateRangeHeader = document.getElementById('date-range-header');
+        const scheduleTable = document.getElementById('schedule-table');
+        const tableHeader = document.getElementById('table-header');
+
+        const reserveModal = document.getElementById('reserve-modal');
+        const joinModal = document.getElementById('join-modal');
+        const alertModal = document.getElementById('alert-modal');
+        const alertMessage = document.getElementById('alert-message');
+
+        const reserveModalDate = document.getElementById('reserve-modal-date');
+        const reserveModalTime = document.getElementById('reserve-modal-time');
+        const reserveCapacityInput = document.getElementById('capacity');
+        const confirmReserveBtn = document.getElementById('confirm-reserve-btn');
+        const cancelReserveBtn = document.getElementById('cancel-reserve-btn');
+
+        const joinModalDate = document.getElementById('join-modal-date');
+        const joinModalTime = document.getElementById('join-modal-time');
+        const joinModalCreator = document.getElementById('join-modal-creator');
+        const joinModalPhone = document.getElementById('join-modal-phone');
+        const joinModalCapacity = document.getElementById('join-modal-capacity');
+        const cancelJoinModalBtn = document.getElementById('cancel-join-modal-btn');
+        const joinEventBtn = document.getElementById('join-event-btn');
+        const cancelJoinBtn = document.getElementById('cancel-join-btn');
+        const deleteEventBtn = document.getElementById('delete-event-btn');
+        const alertOkBtn = document.getElementById('alert-ok-btn');
+
+        let selectedSlotInfo = null;
+
+        // Utilities
+        const showLoader = () => document.getElementById('loading-spinner').classList.remove('hidden');
+        const hideLoader = () => document.getElementById('loading-spinner').classList.add('hidden');
+        const showModal = (modal) => modal.classList.remove('hidden');
+        const hideModal = (modal) => modal.classList.add('hidden');
+        const showAlert = (message) => { alertMessage.textContent = message; showModal(alertModal); };
+        alertOkBtn.addEventListener('click', () => hideModal(alertModal));
+
+        const getWeekRange = () => {
+            // 오늘 10시부터 7일
+            const now = new Date();
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0, 0);
+            const days = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                days.push(d);
             }
+            return days;
+        };
 
-            if (showLoginBtn) {
-                showLoginBtn.addEventListener('click', () => {
-                    signupFormContainer.classList.add('hidden');
-                    loginFormContainer.classList.remove('hidden');
-                });
+        const formatDate = (date) => {
+            const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+            const d = new Date(date);
+            return `${d.getMonth() + 1}.${d.getDate()}(${dayNames[d.getDay()]})`;
+        };
+
+        const formatHour = (hour) => {
+            const nextHour = hour + 1;
+            return `${String(hour).padStart(2, '0')}:00 - ${String(nextHour).padStart(2, '0')}:00`;
+        };
+
+        const fetchReservations = async () => {
+            try {
+                const response = await fetch('/api/reservations');
+                if (!response.ok) throw new Error('Failed to fetch reservations');
+                const result = await response.json();
+                reservations = {};
+                result.data.forEach(res => { reservations[res.slotId] = res; });
+                renderTable();
+            } catch (error) {
+                console.error("Error fetching reservations:", error);
             }
+        };
 
-            // Modal logic
-            const hideModal = (modal) => modal.classList.add('hidden');
-            const showModal = (modal) => modal.classList.remove('hidden');
-
-            const scheduleTable = document.querySelector('tbody');
-            if (scheduleTable) {
-                scheduleTable.addEventListener('click', (e) => {
-                    const slot = e.target.closest('div');
-                    if (!slot) return;
-
-                    const isReserved = slot.dataset.isReserved === 'true';
-                    const isCreator = slot.dataset.isCreator === 'true';
-                    const isParticipant = slot.dataset.isParticipant === 'true';
-                    const isFull = slot.dataset.isFull === 'true';
-                    const slotId = slot.dataset.slotId;
-                    
-                    const [dateStr, hourStr] = slotId.split('-');
-                    const dateObj = new Date(dateStr);
-                    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-                    const formattedDate = `${dateObj.getMonth() + 1}.${dateObj.getDate()}(${dayNames[dateObj.getDay()]})`;
-                    const formattedHour = `${hourStr.padStart(2, '0')}:00 - ${(parseInt(hourStr) + 1).toString().padStart(2, '0')}:00`;
-
-                    if (!isReserved) {
-                        // Gray slot: Create reservation modal
-                        document.getElementById('reserve-modal-date').textContent = `날짜: ${formattedDate}`;
-                        document.getElementById('reserve-modal-time').textContent = `시간: ${formattedHour}`;
-                        document.getElementById('reserve-slot-id').value = slotId;
-                        showModal(reserveModal);
-
-                    } else {
-                        // Reserved slot: Join/Cancel/Delete modal
-                        document.getElementById('join-modal-date').textContent = `날짜: ${formattedDate}`;
-                        document.getElementById('join-modal-time').textContent = `시간: ${formattedHour}`;
-                        document.getElementById('join-modal-creator').textContent = `이벤트 생성자: ${slot.dataset.creatorName}`;
-                        document.getElementById('join-modal-phone').textContent = `전화번호: ${slot.dataset.creatorPhone}`;
-                        document.getElementById('join-modal-capacity').textContent = `인원: ${slot.dataset.capacity}`;
-                        
-                        document.getElementById('join-form').classList.add('hidden');
-                        document.getElementById('cancel-form').classList.add('hidden');
-                        document.getElementById('delete-form').classList.add('hidden');
-
-                        if (isCreator) {
-                            document.getElementById('delete-slot-id').value = slotId;
-                            document.getElementById('delete-form').classList.remove('hidden');
-                        } else if (isParticipant) {
-                            document.getElementById('cancel-slot-id').value = slotId;
-                            document.getElementById('cancel-form').classList.remove('hidden');
-                        } else {
-                            document.getElementById('join-slot-id').value = slotId;
-                            document.getElementById('join-form').classList.remove('hidden');
+        // UI Rendering
+        const renderTable = () => {
+            const weekDays = getWeekRange();
+            tableHeader.innerHTML = `
+                <th class="p-3 text-left font-bold text-sm text-gray-600">시간</th>
+                ${weekDays.map(day => `<th class="p-3 text-center font-bold text-sm text-gray-600">${formatDate(day)}</th>`).join('')}
+            `;
+            scheduleTable.innerHTML = '';
+            for (let hour = 10; hour < 22; hour++) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="p-3 font-medium text-gray-700 text-sm border-b border-gray-200">${formatHour(hour)}</td>
+                    ${weekDays.map((day) => {
+                        const slotId = `${day.toISOString().split('T')[0]}-${hour}`;
+                        const reservation = reservations[slotId];
+                        let bgColor = 'bg-gray-400';
+                        if (reservation) {
+                            bgColor = (reservation.participants.length >= reservation.capacity) ? 'bg-red-500' : 'bg-blue-500';
                         }
-                        showModal(joinModal);
-                    }
-                });
+                        return `
+                            <td class="p-1 border-b border-gray-200">
+                                <div id="${slotId}"
+                                     class="w-full h-10 rounded-lg ${bgColor} cursor-pointer transition duration-150 transform hover:scale-105"
+                                     data-slot-id="${slotId}"
+                                     data-date="${day.toISOString()}"
+                                     data-hour="${hour}">
+                                </div>
+                            </td>
+                        `;
+                    }).join('')}
+                `;
+                scheduleTable.appendChild(row);
             }
+        };
 
-            // Button handlers for modals
-            document.querySelectorAll('button[id^="cancel-reserve-btn"], button[id^="cancel-join-modal-btn"]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    hideModal(reserveModal);
-                    hideModal(joinModal);
-                });
-            });
+        const showMainApp = () => {
+            authView.classList.add('hidden');
+            mainView.classList.remove('hidden');
+            const weekDays = getWeekRange();
+            const start = formatDate(weekDays[0]);
+            const end = formatDate(weekDays[weekDays.length - 1]);
+            dateRangeHeader.textContent = `(${start} - ${end})`;
+            fetchReservations();
+        };
+
+        const showAuthView = () => {
+            mainView.classList.add('hidden');
+            authView.classList.remove('hidden');
+            hideModal(reserveModal);
+            hideModal(joinModal);
+            hideModal(alertModal);
+        };
+
+        // Event Listeners
+        showSignupBtn.addEventListener('click', () => {
+            loginFormContainer.classList.add('hidden');
+            signupFormContainer.classList.remove('hidden');
         });
+
+        showLoginBtn.addEventListener('click', () => {
+            signupFormContainer.classList.add('hidden');
+            loginFormContainer.classList.remove('hidden');
+        });
+
+        // 로그인
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showLoader();
+            const id = document.getElementById('login-id').value;
+            const pw = document.getElementById('login-pw').value;
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id, pw})
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    const token = result.access_token || result.accessToken || result.token;
+                    if (!token) { showAlert("토큰 발급에 실패했습니다."); return; }
+                    setToken(token);                      // 토큰 저장 (NEW)
+                    await checkSessionAndLoadData();      // 사용자 정보 로드
+                } else {
+                    showAlert(result.message);
+                }
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideLoader();
+            }
+        });
+
+        // 회원가입
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showLoader();
+            const name = document.getElementById('signup-name').value;
+            const id = document.getElementById('signup-id').value;
+            const pw = document.getElementById('signup-pw').value;
+            const confirmPw = document.getElementById('signup-confirm-pw').value;
+            const email = document.getElementById('signup-email').value;
+            const phone = document.getElementById('signup-phone').value;
+
+            if (pw !== confirmPw) { showAlert("비밀번호가 일치하지 않습니다."); hideLoader(); return; }
+
+            try {
+                const response = await fetch('/api/signup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, id, pw, email, phone})
+                });
+                const result = await response.json();
+                showAlert(result.message);
+                if (response.ok) {
+                    document.getElementById('login-id').value = id;
+                    document.getElementById('login-pw').value = pw;
+                    showLoginBtn.click();
+                }
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideLoader();
+            }
+        });
+
+        // 로그아웃
+        logoutBtn.addEventListener('click', async () => {
+            showLoader();
+            try {
+                await authedFetch('/api/logout', { method: 'POST' }); // 토큰 첨부
+            } catch (error) {
+                console.error("Logout failed:", error);
+            } finally {
+                clearToken();      // 클라이언트 토큰 제거
+                currentUser = null;
+                showAuthView();
+                hideLoader();
+            }
+        });
+
+        // 슬롯 클릭
+        scheduleTable.addEventListener('click', async (e) => {
+            const slot = e.target.closest('div');
+            if (!slot) return;
+
+            if (!currentUser) { showAlert("예약하려면 먼저 로그인해야 합니다."); return; }
+
+            const { slotId, date, hour } = slot.dataset;
+            selectedSlotInfo = {
+                slotId,
+                date: new Date(date),
+                hour: parseInt(hour),
+                reservation: reservations[slotId]
+            };
+
+            const reservation = selectedSlotInfo.reservation;
+
+            if (!reservation) {
+                // 새 예약
+                reserveModalDate.textContent = `날짜: ${formatDate(selectedSlotInfo.date)}`;
+                reserveModalTime.textContent = `시간: ${formatHour(selectedSlotInfo.hour)}`;
+                showModal(reserveModal);
+            } else {
+                const isCreator = reservation.creatorId === currentUser.userId;
+                const isParticipant = reservation.participants.includes(currentUser.userId);
+
+                joinModalDate.textContent = `날짜: ${formatDate(selectedSlotInfo.date)}`;
+                joinModalTime.textContent = `시간: ${formatHour(selectedSlotInfo.hour)}`;
+                joinModalCreator.textContent = `이벤트 생성자: ${reservation.creatorName || '알 수 없음'}`;
+                joinModalPhone.textContent = `전화번호: ${reservation.creatorPhone || '알 수 없음'}`;
+                joinModalCapacity.textContent = `인원: ${reservation.participants.length} / ${reservation.capacity}`;
+
+                joinEventBtn.classList.add('hidden');
+                cancelJoinBtn.classList.add('hidden');
+                deleteEventBtn.classList.add('hidden');
+
+                if (isCreator) {
+                    deleteEventBtn.classList.remove('hidden');
+                } else if (isParticipant) {
+                    cancelJoinBtn.classList.remove('hidden');
+                } else if (reservation.participants.length >= reservation.capacity) {
+                    showAlert("슬롯이 가득 찼습니다. 다른 시간을 선택하거나 취소될 때까지 기다려 주세요.");
+                    return;
+                } else {
+                    joinEventBtn.classList.remove('hidden');
+                }
+                showModal(joinModal);
+            }
+        });
+
+        // 모달 버튼들
+        cancelReserveBtn.addEventListener('click', () => hideModal(reserveModal));
+        cancelJoinModalBtn.addEventListener('click', () => hideModal(joinModal));
+
+        confirmReserveBtn.addEventListener('click', async () => {
+            const { slotId } = selectedSlotInfo;
+            const capacity = reserveCapacityInput.value;
+            if (capacity < 1) { showAlert("최소 인원은 1명입니다."); return; }
+            showLoader();
+            try {
+                const response = await authedFetch('/api/reservations/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slotId, capacity })
+                });
+                const result = await response.json();
+                if (response.ok) { await fetchReservations(); }
+                showAlert(result.message);
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideModal(reserveModal);
+                hideLoader();
+            }
+        });
+
+        joinEventBtn.addEventListener('click', async () => {
+            if (!selectedSlotInfo) return;
+            const { slotId } = selectedSlotInfo;
+            showLoader();
+            try {
+                const response = await authedFetch('/api/reservations/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'join', slotId })
+                });
+                const result = await response.json();
+                if (response.ok) { await fetchReservations(); }
+                showAlert(result.message);
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideModal(joinModal);
+                hideLoader();
+            }
+        });
+
+        cancelJoinBtn.addEventListener('click', async () => {
+            if (!selectedSlotInfo) return;
+            const { slotId } = selectedSlotInfo;
+            showLoader();
+            try {
+                const response = await authedFetch('/api/reservations/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'cancel', slotId })
+                });
+                const result = await response.json();
+                if (response.ok) { await fetchReservations(); }
+                showAlert(result.message);
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideModal(joinModal);
+                hideLoader();
+            }
+        });
+
+        deleteEventBtn.addEventListener('click', async () => {
+            if (!selectedSlotInfo) return;
+            const { slotId } = selectedSlotInfo;
+            showLoader();
+            try {
+                const response = await authedFetch('/api/reservations/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slotId })
+                });
+                const result = await response.json();
+                if (response.ok) { await fetchReservations(); }
+                showAlert(result.message);
+            } catch (error) {
+                showAlert("네트워크 오류가 발생했습니다.");
+            } finally {
+                hideModal(joinModal);
+                hideLoader();
+            }
+        });
+
+        // 세션 체크 (토큰 있으면 바로 사용자 정보 확인)
+        const checkSessionAndLoadData = async () => {
+            showLoader();
+            try {
+                const token = getToken();
+                if (!token) { showAuthView(); return; }
+                const response = await authedFetch('/api/user_info');
+                if (response.ok) {
+                    const userInfo = await response.json();
+                    currentUser = userInfo;
+                    showMainApp();
+                } else {
+                    showAuthView();
+                }
+            } catch (error) {
+                console.error("Session check failed:", error);
+                showAuthView();
+            } finally {
+                hideLoader();
+            }
+        };
+
+        window.onload = checkSessionAndLoadData;
     </script>
 </body>
 </html>
