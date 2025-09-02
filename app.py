@@ -1,7 +1,7 @@
 import os
 from flask import Flask, render_template, jsonify, request
 from pymongo import MongoClient
-from bson.objectid import ObjectId  # ObjectId를 사용하기 위해 import
+from bson.objectid import ObjectId
 import json
 from datetime import datetime, timedelta
 import secrets
@@ -11,20 +11,18 @@ from flask_jwt_extended import create_access_token, jwt_required, JWTManager, ge
 app = Flask(__name__)
 
 # --- JWT 설정 ---
-# JWT를 위한 시크릿 키 설정 (실제 운영 환경에서는 더욱 복잡한 키를 사용하세요)
 app.config["JWT_SECRET_KEY"] = os.environ.get('JWT_SECRET_KEY', secrets.token_hex(32))
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)  # 토큰 만료 시간 설정
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 jwt = JWTManager(app)
-# ---
 
-# 환경 변수에서 MongoDB 호스트를 가져오도록 수정
+# --- Database 설정 ---
 MONGO_HOST = os.environ.get('MONGO_HOST', 'localhost')
 MONGO_USER = os.environ.get('MONGO_USER')
 MONGO_PASS = os.environ.get('MONGO_PASS')
 try:
     client = MongoClient(f'mongodb://{MONGO_USER}:{MONGO_PASS}@{MONGO_HOST}:27017/')
     db = client.court_kok
-    client.admin.command('ping')  # Check connections
+    client.admin.command('ping')
     print("Successfully connected to MongoDB.")
 except Exception as e:
     print(f"Failed to connect to MongoDB: {e}")
@@ -32,7 +30,6 @@ except Exception as e:
     db = None
 
 # --- JWT 로그아웃 관리를 위한 블록리스트 ---
-# 메모리에 블록리스트를 저장합니다. 운영 환경에서는 Redis 와 같은 DB 사용을 권장합니다.
 BLOCKLIST = set()
 
 @jwt.token_in_blocklist_loader
@@ -40,188 +37,236 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
     return jti in BLOCKLIST
 
+# ===============================================
+# === HTML Page Rendering Routes ================
+# ===============================================
+
 @app.route('/')
 def home():
-    """Renders the main index.html file for the frontend application."""
     return render_template('index.html')
 
-@app.route('/test')
-def test():
-    return "hi world!!!"
-#1
+@app.route('/login')
+def login_page():
+    return render_template('login.html')
+
+@app.route('/signup')
+def signup_page():
+    return render_template('signup.html')
+
+@app.route('/my_registrations')
+@jwt_required()
+def my_registrations_page():
+    """
+    Fetches and displays all events associated with the current user.
+    This includes events they created and events they are attending.
+    """
+    current_user_id = get_jwt_identity()
+    user_id_obj = ObjectId(current_user_id)
+
+    # Find events created by the user
+    created_events_cursor = db.events.find({"creator_id": user_id_obj}).sort("date", 1)
+    created_events_list = []
+    for event in created_events_cursor:
+        # For created events, we need details of all participants
+        participants_details = []
+        for p_id in event.get('participants', []):
+            user = db.users.find_one({"_id": p_id})
+            if user:
+                participants_details.append({
+                    "name": user.get('name'),
+                    "id": user.get('id'),
+                    "phone": user.get('phone')
+                })
+        event['participants_details'] = participants_details
+        created_events_list.append(event)
+    
+    # Find events the user is attending (but did not create)
+    attended_events_cursor = db.events.find({
+        "participants": user_id_obj,
+        "creator_id": {"$ne": user_id_obj}
+    }).sort("date", 1)
+    attended_events_list = []
+    for event in attended_events_cursor:
+        # For attended events, we need details of the creator
+        creator = db.users.find_one({"_id": event['creator_id']})
+        if creator:
+            event['creator_details'] = {
+                "name": creator.get('name'),
+                "id": creator.get('id'),
+                "phone": creator.get('phone')
+            }
+        attended_events_list.append(event)
+
+    return render_template(
+        'my_registrations.html', 
+        created_events=created_events_list, 
+        attended_events=attended_events_list
+    )
+
+@app.route('/user_page')
+@jwt_required()
+def user_page():
+    # We will implement this page later
+    return "<h1>User Page (To be implemented)</h1>"
+
+# ===============================================
+# ============ AUTH API Endpoints ===============
+# ===============================================
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
-    """Handles user registration and stores credentials in MongoDB."""
-    if db is None:
-        return jsonify({"status": "error", "message": "Database not connected"}), 500
-
+    if db is None: return jsonify({"status": "error", "message": "Database not connected"}), 500
     data = request.json
-    name = data.get('name')
-    username = data.get('id')
-    password = data.get('pw')
-    email = data.get('email')
-    phone = data.get('phone')
+    name, username, password, email, phone = data.get('name'), data.get('id'), data.get('pw'), data.get('email'), data.get('phone')
 
-    hashed_password = generate_password_hash(password)
-
+    if not all([name, username, password, email, phone]):
+        return jsonify({"status": "error", "message": "모든 필드를 채워주세요."}), 400
     if db.users.find_one({"id": username}):
         return jsonify({"status": "error", "message": "사용자 ID가 이미 존재합니다."}), 409
 
-    try:
-        user_info = {
-            "name": name,
-            "id": username,
-            "password": hashed_password,
-            "email": email,
-            "phone": phone
-        }
-        db.users.insert_one(user_info)
-        return jsonify({"status": "success", "message": "회원가입이 완료되었습니다."}), 201
-    except Exception as e:
-        print(f"Error during signup: {e}")
-        return jsonify({"status": "error", "message": "회원가입 중 오류가 발생했습니다."}), 500
-
+    hashed_password = generate_password_hash(password)
+    user_info = {"name": name, "id": username, "password": hashed_password, "email": email, "phone": phone}
+    db.users.insert_one(user_info)
+    return jsonify({"status": "success", "message": "회원가입이 완료되었습니다."}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    """Authenticates user and returns a JWT access token."""
-    if db is None:
-        return jsonify({"status": "error", "message": "Database not connected"}), 500
-
+    if db is None: return jsonify({"status": "error", "message": "Database not connected"}), 500
     data = request.json
-    username = data.get('id')
-    password = data.get('pw')
-
+    username, password = data.get('id'), data.get('pw')
     user = db.users.find_one({"id": username})
-
     if user and check_password_hash(user['password'], password):
-        # 인증 성공 시, 사용자 고유 ID(_id)를 identity로 사용하여 access token 생성
         access_token = create_access_token(identity=str(user['_id']))
         return jsonify(access_token=access_token), 200
-
     return jsonify({"status": "error", "message": "아이디 또는 비밀번호가 잘못되었습니다."}), 401
 
-
 @app.route('/api/logout', methods=['POST'])
-@jwt_required()  # 로그아웃을 하려면 유효한 토큰이 필요
+@jwt_required()
 def logout():
-    """Logs out the user by adding the token's JTI to the blocklist."""
     jti = get_jwt()["jti"]
     BLOCKLIST.add(jti)
     return jsonify({"status": "success", "message": "로그아웃 성공"}), 200
 
-
 @app.route('/api/user_info', methods=['GET'])
-@jwt_required()  # 이 엔드포인트는 유효한 토큰이 있어야만 접근 가능
+@jwt_required()
 def get_user_info():
-    """Returns the current user's information from the JWT identity."""
     current_user_id = get_jwt_identity()
     user = db.users.find_one({"_id": ObjectId(current_user_id)})
     if user:
         return jsonify({
-            "status": "success",
-            "userId": str(user['_id']),
-            "userName": user['name'],
-            "userPhone": user['phone'],
-            "userIdName": user['id']
+            "status": "success", "userId": str(user['_id']), "userName": user['name'],
+            "userPhone": user['phone'], "userIdName": user['id']
         }), 200
     return jsonify({"status": "error", "message": "사용자를 찾을 수 없습니다."}), 404
 
+# ===============================================
+# ======== CALENDAR API Endpoints ===============
+# ===============================================
 
-@app.route('/api/reservations', methods=['GET'])
-def get_reservations():
-    """Fetches all court reservations."""
-    if not db:
-        return jsonify({"status": "error", "message": "Database not connected"}), 500
-
-    reservations_data = list(db.reservations.find({}))
-    # ObjectId를 문자열로 변환
-    for res in reservations_data:
-        res['_id'] = str(res['_id'])
-        if 'createdAt' in res:
-            res['createdAt'] = res['createdAt'].isoformat()
-    return jsonify({"status": "success", "data": reservations_data}), 200
-
-
-@app.route('/api/reservations/create', methods=['POST'])
+@app.route('/api/events', methods=['GET'])
 @jwt_required()
-def create_reservation():
-    """Creates a new reservation."""
-    current_user_id = get_jwt_identity()
-    user = db.users.find_one({"_id": ObjectId(current_user_id)})
+def get_events():
+    """Fetches events for a given date."""
+    date_str = request.args.get('date')
+    if not date_str:
+        return jsonify({"status": "error", "message": "Date parameter is required"}), 400
 
-    if not user:
-        return jsonify({"status": "error", "message": "사용자 정보를 찾을 수 없습니다."}), 404
+    try:
+        events_cursor = db.events.find({"date": date_str})
+        events_list = []
+        for event in events_cursor:
+            creator_info = db.users.find_one({"_id": event['creator_id']})
+            event_data = {
+                "id": str(event['_id']),
+                "time": event['time'],
+                "duration": event['duration'],
+                "min": event['min_participants'],
+                "max": event['max_participants'],
+                "current": len(event['participants']),
+                "creator": {
+                    "id": creator_info.get('id', 'N/A'),
+                    "phone": creator_info.get('phone', 'N/A')
+                }
+            }
+            events_list.append(event_data)
+        return jsonify({"status": "success", "events": events_list}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/events', methods=['POST'])
+@jwt_required()
+def create_event():
+    """Creates a new event."""
+    current_user_id = get_jwt_identity()
+    user_id_obj = ObjectId(current_user_id)
 
     data = request.json
-    slot_id = data.get('slotId')
-    capacity = data.get('capacity')
+    date_str = data.get('date')
+    time_str = data.get('time')
+    duration = data.get('duration')
+    min_participants = data.get('min_participants')
+    max_participants = data.get('max_participants')
 
-    reservation = {
-        "slotId": slot_id,
-        "capacity": int(capacity),
-        "creatorId": current_user_id,
-        "creatorName": user['name'],
-        "creatorPhone": user['phone'],
-        "participants": [current_user_id],
-        "createdAt": datetime.now()
+    if not all([date_str, time_str, duration, min_participants, max_participants]):
+        return jsonify({"status": "error", "message": "All fields are required."}), 400
+    
+    # --- Collision Detection ---
+    new_event_start = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+    new_event_end = new_event_start + timedelta(minutes=duration)
+
+    existing_events = db.events.find({"date": date_str})
+    for event in existing_events:
+        existing_start = datetime.strptime(f"{event['date']} {event['time']}", "%Y-%m-%d %H:%M")
+        existing_end = existing_start + timedelta(minutes=event['duration'])
+        # Check for overlap: (StartA < EndB) and (EndA > StartB)
+        if new_event_start < existing_end and new_event_end > existing_start:
+            return jsonify({"status": "error", "message": "Time slot is already booked or overlaps with another event."}), 409
+
+    event_doc = {
+        "date": date_str,
+        "time": time_str,
+        "duration": duration,
+        "min_participants": min_participants,
+        "max_participants": max_participants,
+        "creator_id": user_id_obj,
+        "participants": [user_id_obj],  # Creator is the first participant
+        "created_at": datetime.utcnow()
     }
-    db.reservations.insert_one(reservation)
-    return jsonify({"status": "success", "message": "예약이 생성되었습니다."}), 201
+    db.events.insert_one(event_doc)
+    return jsonify({"status": "success", "message": "Event created successfully."}), 201
 
 
-@app.route('/api/reservations/update', methods=['POST'])
+@app.route('/api/events/<event_id>/signup', methods=['POST'])
 @jwt_required()
-def update_reservation():
-    """Adds or removes a user from a reservation."""
+def signup_for_event(event_id):
+    """Signs up the current user for an event."""
     current_user_id = get_jwt_identity()
+    user_id_obj = ObjectId(current_user_id)
+    
+    try:
+        event_id_obj = ObjectId(event_id)
+    except:
+        return jsonify({"status": "error", "message": "Invalid event ID format."}), 400
 
-    data = request.json
-    action = data.get('action')  # 'join' or 'cancel'
-    slot_id = data.get('slotId')
+    event = db.events.find_one({"_id": event_id_obj})
+    if not event:
+        return jsonify({"status": "error", "message": "Event not found."}), 404
 
-    reservation = db.reservations.find_one({"slotId": slot_id})
-    if reservation is None:
-        return jsonify({"status": "error", "message": "예약을 찾을 수 없습니다."}), 404
+    # --- Validation Checks ---
+    if len(event['participants']) >= event['max_participants']:
+        return jsonify({"status": "error", "message": "Event is already full."}), 409
+    if user_id_obj in event['participants']:
+        return jsonify({"status": "error", "message": "You are already signed up for this event."}), 409
 
-    if action == 'join':
-        if len(reservation.get('participants', [])) >= reservation['capacity']:
-            return jsonify({"status": "error", "message": "슬롯이 가득 찼습니다."}), 400
-        if current_user_id not in reservation.get('participants', []):
-            db.reservations.update_one({"slotId": slot_id}, {"$push": {"participants": current_user_id}})
-    elif action == 'cancel':
-        if current_user_id in reservation.get('participants', []):
-            participants = reservation['participants']
-            participants.remove(current_user_id)
-            if len(participants) == 0:
-                db.reservations.delete_one({"slotId": slot_id})
-                return jsonify({"status": "success", "message": "예약이 취소되었습니다."}), 200
-            else:
-                db.reservations.update_one({"slotId": slot_id}, {"$set": {"participants": participants}})
+    # --- Add user to participants list ---
+    db.events.update_one(
+        {"_id": event_id_obj},
+        {"$push": {"participants": user_id_obj}}
+    )
+    return jsonify({"status": "success", "message": "Successfully signed up for the event."}), 200
 
-    return jsonify({"status": "success", "message": "예약이 업데이트되었습니다."}), 200
-
-
-@app.route('/api/reservations/delete', methods=['POST'])
-@jwt_required()
-def delete_reservation():
-    """Deletes a reservation, only if the user is the creator."""
-    current_user_id = get_jwt_identity()
-
-    data = request.json
-    slot_id = data.get('slotId')
-
-    reservation = db.reservations.find_one({"slotId": slot_id})
-    if not reservation:
-        return jsonify({"status": "error", "message": "예약을 찾을 수 없습니다."}), 404
-
-    if reservation.get('creatorId') != current_user_id:
-        return jsonify({"status": "error", "message": "예약 삭제 권한이 없습니다."}), 403
-
-    db.reservations.delete_one({"slotId": slot_id})
-    return jsonify({"status": "success", "message": "예약이 성공적으로 삭제되었습니다."}), 200
-
+# ===============================================
+# ===============================================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

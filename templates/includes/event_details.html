@@ -1,0 +1,57 @@
+<!-- Event Details/Creation Column -->
+<div id="event-details-container" class="p-4 bg-white rounded-lg shadow-md flex-shrink-0 hidden ml-6" style="flex-basis: 350px;">
+    
+    <!-- View: Create New Event -->
+    <div id="create-event-view">
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Create Event</h3>
+        <p id="create-event-date-time" class="text-gray-600 mb-4">Date and Time</p>
+        
+        <label class="font-semibold text-gray-700">Duration (minutes)</label>
+        <div id="duration-options" class="flex space-x-2 my-2">
+            <button data-duration="30" class="duration-btn flex-1 py-2 border rounded-full hover:bg-blue-100">30</button>
+            <button data-duration="60" class="duration-btn flex-1 py-2 border rounded-full hover:bg-blue-100">60</button>
+            <button data-duration="90" class="duration-btn flex-1 py-2 border rounded-full hover:bg-blue-100">90</button>
+            <button data-duration="120" class="duration-btn flex-1 py-2 border rounded-full hover:bg-blue-100">120</button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mt-4">
+            <div>
+                <label for="min-participants" class="block text-sm font-medium text-gray-700">Min Participants</label>
+                <input type="number" id="min-participants" value="2" min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+            </div>
+            <div>
+                <label for="max-participants" class="block text-sm font-medium text-gray-700">Max Participants</label>
+                <input type="number" id="max-participants" value="4" min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+            </div>
+        </div>
+
+        <button id="create-event-submit-btn" class="w-full mt-6 bg-blue-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-blue-700">Create</button>
+    </div>
+
+    <!-- View: View Available Event -->
+    <div id="view-event-available" class="hidden">
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Event Details</h3>
+        <div class="space-y-2 text-gray-700">
+            <p><strong>Date:</strong> <span id="view-available-date"></span></p>
+            <p><strong>Time:</strong> <span id="view-available-time"></span></p>
+            <p><strong>Participants:</strong> <span id="view-available-participants"></span></p>
+            <p><strong>Creator:</strong> <span id="view-available-creator-id"></span></p>
+            <p><strong>Contact:</strong> <span id="view-available-creator-contact"></span></p>
+        </div>
+        <button id="signup-event-btn" class="w-full mt-6 bg-green-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-green-700">Sign Up</button>
+    </div>
+
+    <!-- View: View Full/Unavailable Event -->
+    <div id="view-event-full" class="hidden">
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Event Details</h3>
+        <div class="space-y-2 text-gray-700">
+            <p><strong>Date:</strong> <span id="view-full-date"></span></p>
+            <p><strong>Time:</strong> <span id="view-full-time"></span></p>
+            <p><strong>Participants:</strong> <span id="view-full-participants"></span></p>
+            <p><strong>Creator:</strong> <span id="view-full-creator-id"></span></p>
+            <p><strong>Contact:</strong> <span id="view-full-creator-contact"></span></p>
+        </div>
+        <button disabled class="w-full mt-6 bg-pink-400 text-white font-semibold py-2 rounded-lg cursor-not-allowed">Full / Unavailable</button>
+    </div>
+
+</div>
