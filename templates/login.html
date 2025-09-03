@@ -5,84 +5,97 @@
 {% block content %}
 <div class="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
 
-    <div class="mb-8">
-        <a href="/" class="text-5xl font-bold text-blue-600">Court-Kok</a>
+  <!-- 로고 & 브랜드 -->
+  <div class="mb-8 text-center">
+    <img src="/static/images/court-kok-logo.png" alt="Court-Kok 로고" class="mx-auto w-32 h-32 mb-4">
+    <h1 class="text-3xl font-extrabold text-gray-900">Court-Kok</h1>
+    <p class="text-gray-500 text-sm mt-1">농구 예약을 간단하게, 즐겁게 🏀</p>
+  </div>
+
+  <!-- 로그인 카드 -->
+  <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 space-y-6">
+
+    <div class="text-center">
+      <h2 class="text-2xl font-bold text-gray-800">로그인</h2>
+      <p class="text-gray-500 mt-2">서비스를 이용하려면 로그인하세요.</p>
     </div>
 
-    <div class="w-full max-w-md bg-white rounded-xl shadow-lg p-8 space-y-6">
+    <form id="login-form" class="space-y-5">
+      <div>
+        <label for="login-id" class="block text-sm font-medium text-gray-700 mb-1">아이디</label>
+        <input type="text" id="login-id" aria-label="아이디 입력" placeholder="아이디를 입력하세요"
+          class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200">
+      </div>
 
-        <div class="text-center">
-            <h2 class="text-2xl font-bold text-gray-800">로그인</h2>
-            <p class="text-gray-500 mt-2">서비스를 이용하려면 로그인하세요.</p>
-        </div>
+      <div>
+        <label for="login-pw" class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+        <input type="password" id="login-pw" aria-label="비밀번호 입력" placeholder="비밀번호를 입력하세요"
+          class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200">
+      </div>
 
-        <form id="login-form" class="space-y-4">
+      <button type="submit"
+        class="w-full bg-emerald-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-emerald-700 transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+        로그인
+      </button>
+    </form>
 
-            <div>
-                <label for="login-id" class="block text-sm font-medium text-gray-700 mb-1">아이디</label>
-                <input type="text" id="login-id" placeholder="아이디를 입력하세요" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-            </div>
+    <!-- 에러 메시지 영역 -->
+    <div id="error-message" class="text-center text-red-500 text-sm hidden"></div>
 
-            <div>
-                <label for="login-pw" class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
-                <input type="password" id="login-pw" placeholder="비밀번호를 입력하세요" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-            </div>
-
-            <button type="submit" class="w-full bg-blue-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-blue-700 transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                로그인
-            </button>
-        </form>
-
-        <div class="text-center mt-6">
-            <p class="text-sm text-gray-600">
-                계정이 없으신가요?
-                <a href="/signup" class="font-semibold text-blue-600 hover:text-blue-700 transition duration-200">회원가입</a>
-            </p>
-        </div>
+    <div class="text-center mt-6">
+      <p class="text-sm text-gray-600">
+        계정이 없으신가요?
+        <a href="/signup" class="font-semibold text-emerald-600 hover:text-emerald-700 transition duration-200">
+          회원가입
+        </a>
+      </p>
     </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const loginForm = document.getElementById('login-form');
+document.addEventListener('DOMContentLoaded', () => {
+  const loginForm = document.getElementById('login-form');
+  const errorBox = document.getElementById('error-message');
 
-        if (loginForm) {
-            loginForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                showLoader(); // base.html에 정의된 함수 사용
-                const id = document.getElementById('login-id').value;
-                const pw = document.getElementById('login-pw').value;
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showLoader();
+      const id = document.getElementById('login-id').value.trim();
+      const pw = document.getElementById('login-pw').value.trim();
 
-                if (!id || !pw) {
-                    showAlert("아이디와 비밀번호를 모두 입력해주세요."); // base.html에 정의된 함수 사용
-                    hideLoader();
-                    return;
-                }
+      if (!id || !pw) {
+        errorBox.textContent = "아이디와 비밀번호를 모두 입력해주세요.";
+        errorBox.classList.remove("hidden");
+        hideLoader();
+        return;
+      }
 
-                try {
-                    const response = await fetch('/api/login', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({id, pw})
-                    });
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, pw })
+        });
 
-                    // response.ok가 true이면 서버가 쿠키를 성공적으로 설정한 것입니다.
-                    if (response.ok) {
-                        // 토큰을 직접 처리할 필요 없이 바로 메인 페이지로 이동합니다.
-                        window.location.href = '/';
-                    } else {
-                        const result = await response.json();
-                        showAlert(result.message || "로그인에 실패했습니다.");
-                    }
-                } catch (error) {
-                    showAlert("네트워크 오류가 발생했습니다.");
-                } finally {
-                    hideLoader();
-                }
-            });
+        if (response.ok) {
+          window.location.href = '/';
+        } else {
+          const result = await response.json();
+          errorBox.textContent = result.message || "로그인에 실패했습니다.";
+          errorBox.classList.remove("hidden");
         }
+      } catch (error) {
+        errorBox.textContent = "네트워크 오류가 발생했습니다.";
+        errorBox.classList.remove("hidden");
+      } finally {
+        hideLoader();
+      }
     });
+  }
+});
 </script>
 {% endblock %}
