@@ -13,6 +13,7 @@ from flask_jwt_extended import (
 )
 from flask_sock import Sock
 import math
+import requests
 
 app = Flask(__name__)
 metrics = PrometheusMetrics(app)
@@ -20,6 +21,9 @@ connected_clients_gauge = Gauge(
     'connected_clients',
     'Number of currently connected WebSocket clients'
 )
+
+# Apps Script 설정
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4BCNWXcj3HPxYSp5NTUsUTFrpRGXTEZuvnxaNbKE65iswcnD1EuYFTwDLXfZY19Uz/exec"
 
 # --- JWT 설정 (쿠키 기반) ---
 app.config["JWT_SECRET_KEY"] = "super-secret-key-for-dev"
@@ -55,7 +59,6 @@ except Exception as e:
 # --- JWT 블록리스트 (단일 프로세스용) ---
 BLOCKLIST = set()
 
-
 @jwt.token_in_blocklist_loader
 def check_if_token_in_blocklist(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
@@ -78,6 +81,42 @@ def create_notification(user_id, event, category):
         "created_at": datetime.utcnow(), "is_read": False,
     }
     db.notifications.insert_one(notif)
+
+    # 이메일 발송 로직 수정
+    user = db.users.find_one({"_id": user_id})
+    if user and user.get("email"):
+        
+        # 1. 알림 데이터를 먼저 포맷합니다.
+        # format_notification_data 함수는 DB에 저장된 BSON ObjectId를 처리하지 못하므로
+        # DB에 넣기 전의 파이썬 dict 객체인 'notif'를 그대로 사용합니다.
+        formatted_data = format_notification_data(notif)
+
+        # 2. 포맷된 데이터를 기반으로 이메일 제목과 본문을 생성합니다.
+        if formatted_data:
+            # 포맷팅 성공 시
+            subject = f"[Court-Kok]: {formatted_data['line2_prefix']} 알림"
+            body = (
+                f"{formatted_data['line1_prefix']} {formatted_data['line1_suffix']}\n"
+                f"{formatted_data['line2_prefix']} {formatted_data['line2_suffix']}"
+            )
+        else:
+            # 포맷팅 실패 시를 대비한 기본 메시지 (기존 방식)
+            print("Warning: Notification formatting failed. Sending a basic email.")
+            subject = f"[Court-Kok]: {event['date']} {category} 알림"
+            body = f"{event['date']} {event['time']} 모임 알림이 도착했습니다.\n카테고리: {category}"
+
+        # 3. 생성된 제목과 본문으로 이메일을 보냅니다.
+        try:
+            requests.post(
+                APPS_SCRIPT_URL,
+                json={
+                    "recipientEmail": user["email"],
+                    "subject": subject,
+                    "body": body
+                }
+            )
+        except Exception as e:
+            print(f"Email sending failed: {e}")
 
 
 def get_weekday_korean(date_obj):
@@ -109,6 +148,34 @@ def format_notification_data(notif):
     except (KeyError, ValueError, TypeError) as e:
         print(f"Error formatting notification {notif.get('_id')}: {e}")
         return None
+    
+
+
+
+@app.route('/api/send_email', methods=['POST'])
+@jwt_required()
+def send_email():
+    data = request.json or {}
+    user_id = get_jwt_identity()
+
+    # 1. Look up recipient email in MongoDB
+    user = db.users.find_one({"_id": ObjectId(user_id)})
+    if not user or not user.get("email"):
+        return jsonify({"status": "error", "message": "User email not found"}), 404
+
+    payload = {
+        "recipientEmail": user["email"],
+        "subject": data.get("subject", "No Subject"),
+        "body": data.get("body", "")
+    }
+
+    try:
+        res = requests.post(APPS_SCRIPT_URL, json=payload)
+        return jsonify(res.json()), res.status_code
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 
 
 def humanize_time(dt):
