@@ -9,10 +9,13 @@ services:
       - MONGO_USER=root
       - MONGO_PASS=password
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
 
   mongodb:
     image: mongo:latest
+    ports:
+      - "27017:27017"
     expose:
       - "27017"
     volumes:
@@ -20,6 +23,11 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=password
+    healthcheck: # <--- 이 부분을 추가합니다.
+      test: [ "CMD", "mongo", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   mongodb_data:

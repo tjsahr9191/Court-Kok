@@ -11,7 +11,8 @@ services:
       - MONGO_USER=root
       - MONGO_PASS=password
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -20,6 +21,8 @@ services:
     image: mongo:latest
     # MongoDB 컨테이너의 포트를 외부에 노출시킬 필요가 없습니다.
     # Flask 앱은 내부 네트워크를 통해 접근하므로 expose만으로 충분합니다.
+    ports:
+      - "27017:27017"
     expose:
       - "27017"
     volumes:
@@ -27,6 +30,11 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=password
+    healthcheck: # <--- 이 부분을 추가합니다.
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - app-network
 
