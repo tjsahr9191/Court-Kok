@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}My Info - Court-Kok{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-2xl mx-auto flex flex-col" style="min-height: 80vh;">
+  {% include 'includes/header.html' %}
+
+  <main class="bg-white p-8 rounded-lg shadow-md flex-grow">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">My Information</h1>
+
+    <div class="space-y-4">
+      <div class="flex items-center">
+        <label class="w-24 font-semibold text-gray-600">이름:</label>
+        <p class="text-lg text-gray-800">{{ user.name }}</p>
+      </div>
+      <div class="flex items-center">
+        <label class="w-24 font-semibold text-gray-600">아이디:</label>
+        <p class="text-lg text-gray-800">{{ user.id }}</p>
+      </div>
+      <div class="flex items-center">
+        <label class="w-24 font-semibold text-gray-600">이메일:</label>
+        <p class="text-lg text-gray-800">{{ user.email }}</p>
+      </div>
+      <div class="flex items-center">
+        <label class="w-24 font-semibold text-gray-600">전화번호:</label>
+        <p class="text-lg text-gray-800">{{ user.phone }}</p>
+      </div>
+    </div>
+
+    <div class="mt-8 pt-6 border-t">
+      <h2 class="text-2xl font-semibold text-gray-700 mb-4">Change Password</h2>
+
+      <form id="change-password-form" class="space-y-4" novalidate>
+        <div class="relative">
+          <input type="password" id="current-password" placeholder="Current Password"
+                 class="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+                 required>
+          <button type="button" data-toggle="#current-password"
+                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">Show</button>
+        </div>
+
+        <div class="relative">
+          <input type="password" id="new-password" placeholder="New Password"
+                 class="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+                 minlength="8" required>
+          <button type="button" data-toggle="#new-password"
+                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">Show</button>
+        </div>
+
+        <div class="relative">
+          <input type="password" id="confirm-password" placeholder="Confirm New Password"
+                 class="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+                 required>
+          <button type="button" data-toggle="#confirm-password"
+                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">Show</button>
+        </div>
+
+        <button type="submit"
+                class="w-full bg-green-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-700 transition duration-200">
+          Update Password
+        </button>
+
+        <p class="text-xs text-gray-500 mt-2">* 비밀번호는 최소 8자 이상을 권장합니다.</p>
+      </form>
+    </div>
+  </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // 헤더 요소 (보조)
+  const userNameDisplay   = document.getElementById('user-name-display');
+  const userMenu          = document.getElementById('user-menu');
+  const userMenuDropdown  = document.getElementById('user-menu-dropdown');
+  const logoutBtn         = document.getElementById('logout-btn');
+
+  // 비밀번호 변경 폼 요소
+  const changePasswordForm = document.getElementById('change-password-form');
+
+  // 비밀번호 표시/숨김 토글
+  document.querySelectorAll('.toggle-visibility').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.querySelector(btn.dataset.toggle);
+      if (!target) return;
+      const isPwd = target.type === 'password';
+      target.type = isPwd ? 'text' : 'password';
+      btn.textContent = isPwd ? 'Hide' : 'Show';
+    });
+  });
+
+  // 비밀번호 변경 제출 (성공 시 자동 로그아웃)
+  if (changePasswordForm) {
+    changePasswordForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const current_password = document.getElementById('current-password').value.trim();
+      const new_password     = document.getElementById('new-password').value.trim();
+      const confirm_password = document.getElementById('confirm-password').value.trim();
+
+      if (!current_password || !new_password || !confirm_password) {
+        showAlert('모든 비밀번호 입력란을 채워주세요.');
+        return;
+      }
+      if (new_password.length < 8) {
+        showAlert('새 비밀번호는 최소 8자 이상이어야 합니다.');
+        return;
+      }
+      if (new_password !== confirm_password) {
+        showAlert('새 비밀번호가 일치하지 않습니다.');
+        return;
+      }
+      if (current_password === new_password) {
+        showAlert('새 비밀번호는 현재 비밀번호와 달라야 합니다.');
+        return;
+      }
+
+      showLoader();
+      try {
+        const response = await authedFetch('/api/change_password', {
+          method: 'POST',
+          body: JSON.stringify({ current_password, new_password, confirm_password })
+        });
+        const result = await response.json().catch(() => ({}));
+        showAlert(result.message || '비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
+
+        if (response.ok) {
+          // ★ 여기서 자동 로그아웃: 쿠키 삭제 + 블록리스트 반영
+          try { await authedFetch('/api/logout', { method: 'POST' }); } catch (_) {}
+          // 잠깐 안내 후 로그인 페이지로 이동
+          setTimeout(() => { window.location.href = '/login'; }, 1200);
+        }
+      } catch (err) {
+        if (err.message !== 'Unauthorized') {
+          showAlert('비밀번호 변경 중 오류가 발생했습니다.');
+        }
+      } finally {
+        hideLoader();
+      }
+    });
+  }
+
+  // 초기화: 사용자 이름 반영(보조)
+  (async () => {
+    try {
+      const res = await authedFetch('/api/user_info');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (userNameDisplay && data?.userName) userNameDisplay.textContent = data.userName;
+    } catch (_) {}
+  })();
+
+  // 헤더 드롭다운 보조 제어(기본은 base에서 처리)
+  if (userMenu && userMenuDropdown) {
+    userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
+    document.addEventListener('click', (e) => {
+      if (!userMenu.contains(e.target)) userMenuDropdown.classList.add('hidden');
+    });
+  }
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      showLoader();
+      try { await authedFetch('/api/logout', { method: 'POST' }); }
+      catch(_) {}
+      finally {
+        hideLoader();
+        window.location.href = '/login';
+      }
+    });
+  }
+});
+</script>
+{% endblock %}
