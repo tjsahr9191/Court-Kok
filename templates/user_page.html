@@ -11,7 +11,7 @@
 
     {# --- 상단 요약 카드 (UI) --- #}
     <section class="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-      <div class="h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-xl font-bold select-none">
+      <div class="h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-indigo-500 text-white flex items-center justify-center text-xl font-bold select-none">
         {{ (user.name or 'U')[:1] }}
       </div>
       <div class="min-w-0">
@@ -50,7 +50,7 @@
         <div class="relative">
           <label for="current-password" class="sr-only">현재 비밀번호</label>  {# (I18N) #}
           <input type="password" id="current-password" placeholder="현재 비밀번호"
-                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                  required>
           <button type="button" data-toggle="#current-password"
                   class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 px-2 py-1 rounded hover:bg-gray-100">
@@ -61,7 +61,7 @@
         <div class="relative">
           <label for="new-password" class="sr-only">새 비밀번호</label>  {# (I18N) #}
           <input type="password" id="new-password" placeholder="새 비밀번호"
-                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                  minlength="8" required>
           <button type="button" data-toggle="#new-password"
                   class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 px-2 py-1 rounded hover:bg-gray-100">
@@ -82,7 +82,7 @@
         <div class="relative">
           <label for="confirm-password" class="sr-only">새 비밀번호 확인</label>  {# (I18N) #}
           <input type="password" id="confirm-password" placeholder="새 비밀번호 확인"
-                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                  required>
           <button type="button" data-toggle="#confirm-password"
                   class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 px-2 py-1 rounded hover:bg-gray-100">

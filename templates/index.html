@@ -145,7 +145,7 @@ function paintSelectionRange(startHHMM, durationMin) {
       const isPast = currentDateInLoop < today;
       const hasEvent = eventDatesSet.has(dateStr);
 
-      let cellClasses = 'date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-gray-700';
+      let cellClasses = 'date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 text-gray-700';
 
       if (dateStr === selectedDate) {
         cellClasses += ' bg-emerald-600 text-white font-bold';
@@ -210,7 +210,7 @@ function paintSelectionRange(startHHMM, durationMin) {
           }
 
           const slot = `
-            <div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            <div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                  data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'
                  tabindex="0" role="button" aria-label="${timeStr}">
               ${slotText}
@@ -302,7 +302,7 @@ function paintSelectionRange(startHHMM, durationMin) {
         btn.classList.toggle('cursor-not-allowed', disabled);
       });
       selectedDuration = null;
-      document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+      document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-emerald-500', 'text-white'));
     } else {
       const endTime = new Date(`${selectedDate}T${eventData.time}`);
       endTime.setMinutes(endTime.getMinutes() + eventData.duration);
@@ -422,8 +422,8 @@ function paintSelectionRange(startHHMM, durationMin) {
         durationOptions.addEventListener('click', (e) => {
           const btn = e.target.closest('.duration-btn');
           if (!btn || btn.disabled) return;
-          document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
-          btn.classList.add('bg-blue-500', 'text-white');
+          document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-emerald-500', 'text-white'));
+          btn.classList.add('bg-emerald-500', 'text-white');
           selectedDuration = btn.dataset.duration;
 
           // (ADD) 선택한 시작시간 + 지속시간으로 구간 하이라이트

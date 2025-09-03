@@ -138,7 +138,7 @@ def format_notification_data(notif):
                  "line2_suffix": "이(가) 취소되었습니다."})
         elif notif['category'] == 'full':
             data.update(
-                {"color": "blue", "line1_prefix": event_time_str, "line1_suffix": "있는", "line2_prefix": event_name_str,
+                {"color": "emerald", "line1_prefix": event_time_str, "line1_suffix": "있는", "line2_prefix": event_name_str,
                  "line2_suffix": f"의 최대인원 {details['max_participants']}명이 모두 모였습니다!"})
         elif notif['category'] == 'reminder':
             data.update(
