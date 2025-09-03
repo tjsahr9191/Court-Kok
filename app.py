@@ -1,16 +1,18 @@
 import os
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import json
 from datetime import datetime, timedelta
 import secrets
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity, get_jwt, decode_token
+from flask_jwt_extended import (
+    create_access_token, jwt_required, JWTManager, get_jwt_identity,
+    get_jwt, set_access_cookies, unset_jwt_cookies, verify_jwt_in_request, decode_token
+)
 
 from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import Gauge
-import time # time 모듈을 별도로 import 합니다.
 
 from flask_sock import Sock
 
@@ -21,8 +23,12 @@ metrics = PrometheusMetrics(app)
 connected_clients_gauge = Gauge('connected_clients', 'Number of currently connected WebSocket clients')
 
 # --- JWT 설정 ---
-app.config["JWT_SECRET_KEY"] = os.environ.get('JWT_SECRET_KEY', secrets.token_hex(32))
+app.config["JWT_SECRET_KEY"] = "super-secret-key-for-dev"
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
+app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+app.config["JWT_COOKIE_SECURE"] = False  # 배포 시(https) True로 변경 권장
+app.config["JWT_COOKIE_CSRF_PROTECT"] = False  # CSRF 보호 필요 시 True로 설정
+
 jwt = JWTManager(app)
 
 # --- Database 설정 ---
@@ -39,16 +45,6 @@ def connect_to_mongodb():
         return client
     except Exception as e:
         print(f"Failed to connect to MongoDB: {e}.")
-# def connect_to_mongodb():
-#     try:
-#         # Docker 외부에서 실행하므로 'mongodb' 대신 'localhost'를 사용합니다.
-#         client = MongoClient(f'mongodb://root:password@localhost:27017/',
-#                              serverSelectionTimeoutMS=5000)
-#         client.admin.command('ping')
-#         print("Successfully connected to MongoDB.")
-#         return client
-#     except Exception as e:
-#         print(f"Failed to connect to MongoDB: {e}.")
 
 client = connect_to_mongodb()
 db = client.court_kok if client else None
@@ -90,10 +86,23 @@ def home():
 
 @app.route('/login')
 def login_page():
+    try:
+        verify_jwt_in_request(optional=True)
+        current_user = get_jwt_identity()
+        if current_user:
+            return redirect(url_for('home'))
+    except Exception:  # 만료되거나 손상된 토큰은 무시
+        pass
     return render_template('login.html')
-
 @app.route('/signup')
 def signup_page():
+    try:
+        verify_jwt_in_request(optional=True)
+        current_user = get_jwt_identity()
+        if current_user:
+            return redirect(url_for('home'))
+    except Exception:  # 만료되거나 손상된 토큰은 무시
+        pass
     return render_template('signup.html')
 
 @app.route('/my_registrations')
@@ -107,8 +116,13 @@ def my_registrations_page():
 @app.route('/user_page')
 @jwt_required()
 def user_page():
-    # We will implement this page later
-    return "<h1>User Page (To be implemented)</h1>"
+    current_user_id = get_jwt_identity()
+    user_data = db.users.find_one({"_id": ObjectId(current_user_id)})
+
+    if not user_data:
+        return "User not found!", 404
+
+    return render_template('user_page.html', user=user_data)
 
 # ===============================================
 # ============ AUTH API Endpoints ===============
@@ -146,11 +160,52 @@ def login():
 def logout():
     jti = get_jwt()["jti"]
     BLOCKLIST.add(jti)
-    return jsonify({"status": "success", "message": "로그아웃 성공"}), 200
+    response = jsonify({"status": "success", "message": "로그아웃 성공"})
+    unset_jwt_cookies(response)
+    return response, 200
 
 # ===============================================
 # ========= WEBSOCKET API Endpoints =============
 # ===============================================
+
+@app.route('/api/user_info', methods=['GET'])
+@jwt_required()
+def get_user_info():
+    current_user_id = get_jwt_identity()
+    user = db.users.find_one({"_id": ObjectId(current_user_id)})
+    if user:
+        return jsonify({
+            "status": "success", "userId": str(user['_id']), "userName": user['name'],
+            "userPhone": user['phone'], "userIdName": user['id']
+        }), 200
+    return jsonify({"status": "error", "message": "사용자를 찾을 수 없습니다."}), 404
+
+@app.route('/api/change_password', methods=['POST'])
+@jwt_required()
+def change_password():
+    current_user_id = get_jwt_identity()
+    user = db.users.find_one({"_id": ObjectId(current_user_id)})
+
+    data = request.json
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    confirm_password = data.get('confirm_password')
+
+    if not all([current_password, new_password, confirm_password]):
+        return jsonify({"message": "모든 필드를 입력해주세요."}), 400
+    if not check_password_hash(user['password'], current_password):
+        return jsonify({"message": "현재 비밀번호가 일치하지 않습니다."}), 401
+    if new_password != confirm_password:
+        return jsonify({"message": "새 비밀번호가 일치하지 않습니다."}), 400
+    if check_password_hash(user['password'], new_password):
+        return jsonify({"message": "새 비밀번호는 현재 비밀번호와 달라야 합니다."}), 400
+
+    new_hashed_password = generate_password_hash(new_password)
+    db.users.update_one(
+        {"_id": ObjectId(current_user_id)},
+        {"$set": {"password": new_hashed_password}}
+    )
+    return jsonify({"message": "비밀번호가 성공적으로 변경되었습니다. 다시 로그인해주세요."}), 200
 
 @sock.route('/ws')
 def websocket_api(ws):
@@ -356,8 +411,6 @@ def websocket_api(ws):
                 del clients[current_user_id]
         print(f"Connection closed for user {current_user_id}. Active users: {len(clients)}")
 
-# ===============================================
-# ===============================================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
