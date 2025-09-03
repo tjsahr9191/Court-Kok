@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Court-Kok Calendar{% endblock %}
+{% block title %}Court-Kok 캘린더{% endblock %}  {# (I18N) #}
 
 {% block content %}
 <div class="w-full flex flex-col" style="min-height: calc(100vh - 2rem);">
   {% include 'includes/header.html' %}
 
-  <main class="flex w-full flex-grow">
+  <!-- 칼럼 간 여백 추가 (UI) -->
+  <main class="flex w-full flex-grow gap-6 md:gap-8">  {# (UI) #}
     {% include 'includes/calendar_view.html' %}
     {% include 'includes/daily_schedule.html' %}
     {% include 'includes/event_details.html' %}
@@ -61,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
     calendarGrid.innerHTML = '';
     const year = date.getFullYear();
     const month = date.getMonth();
-    currentMonthYearDisplay.textContent = `${year}년 ${month + 1}월`;
+    currentMonthYearDisplay.textContent = `${year}년 ${month + 1}월`; // (I18N)
 
     const firstDayOfMonth = new Date(year, month, 1).getDay();
     const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
@@ -73,8 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const today = new Date();
       const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
-      const todayClass = isToday ? 'bg-blue-500 text-white font-bold is-today' : 'hover:bg-gray-100';
-      const cell = `<div class="date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg ${todayClass}" data-date="${dateStr}">${day}</div>`;
+
+      // 선택/오늘 스타일 강화 (UI) — is-today 클래스는 기존 로직 유지
+      const baseClass = 'date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-gray-700'; // (UI)
+      const todayClass = isToday
+        ? 'bg-blue-500 text-white font-bold shadow-sm is-today'   // (UI)
+        : 'hover:bg-gray-100';                                    // (UI)
+
+      const cell = `<div class="${baseClass} ${todayClass}" data-date="${dateStr}" tabindex="0" role="button" aria-label="${day}일"> ${day} </div>`; // (UI)
       calendarGrid.insertAdjacentHTML('beforeend', cell);
     }
   }
@@ -82,11 +89,11 @@ document.addEventListener('DOMContentLoaded', () => {
   async function renderDailySchedule(dateStr) {
     showLoader();
     const [year, month, day] = dateStr.split('-');
-    if (scheduleDateDisplay) scheduleDateDisplay.textContent = `${year}년 ${month}월 ${day}일`;
+    if (scheduleDateDisplay) scheduleDateDisplay.textContent = `${year}년 ${month}월 ${day}일`; // (I18N)
 
     try {
       const response = await authedFetch(`/api/events?date=${dateStr}`);
-      if (!response.ok) throw new Error('Failed to fetch events.');
+      if (!response.ok) throw new Error('일정 데이터를 불러오지 못했습니다.'); // (I18N)
       const data = await response.json();
       const events = data.events || [];
 
@@ -106,33 +113,39 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let minute = 0; minute < 60; minute += 30) {
           const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
           const slotEventInfo = eventMap.get(timeStr);
+
+          // 라인/호버/포커스 스타일 개선 (UI)
           const borderClass = minute === 0 ? 'border-t-2 border-gray-400' : 'border-t border-dashed border-gray-300';
-          let slotClass = 'bg-gray-200 hover:bg-gray-300 text-gray-500';
+          let slotClass = 'bg-gray-200 hover:bg-gray-300 text-gray-600'; // (UI)
           let slotText = timeStr;
           let slotType = 'empty';
           let eventData = '{}';
 
           if (slotEventInfo) {
             const isFull = slotEventInfo.event.current >= slotEventInfo.event.max;
-            slotClass = isFull ? 'bg-pink-300 text-white' : 'bg-green-300 text-white';
+            slotClass = isFull ? 'bg-pink-300 text-white' : 'bg-green-300 text-white'; // (UI)
             slotType = isFull ? 'full' : 'available';
             eventData = JSON.stringify(slotEventInfo.event);
             if (slotEventInfo.isStart) {
-              slotText = `${timeStr} - ${slotEventInfo.event.current} / ${slotEventInfo.event.max}명`;
+              slotText = `${timeStr} · ${slotEventInfo.event.current} / ${slotEventInfo.event.max}명`; // (I18N)
             } else {
               slotText = `&nbsp;`;
               slotClass += ' opacity-80';
             }
           }
 
-          const slot = `<div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer"
-                          data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'>${slotText}</div>`;
+          const slot = `
+            <div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                 data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'
+                 tabindex="0" role="button" aria-label="${timeStr}">
+              ${slotText}
+            </div>`; // (UI)
           scheduleSlotsContainer.insertAdjacentHTML('beforeend', slot);
         }
       }
     } catch (error) {
       if (error.message !== 'Unauthorized') {
-        showAlert("일정을 불러오는 데 실패했습니다. 다시 시도해 주세요.");
+        showAlert("일정을 불러오는 데 실패했습니다. 다시 시도해 주세요."); // (I18N)
       }
     } finally {
       hideLoader();
@@ -152,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function formatKoreanDate(dateStr) {
     const [y, m, d] = dateStr.split('-');
-    return `${y}년 ${m}월 ${d}일`;
+    return `${y}년 ${m}월 ${d}일`; // (I18N)
   }
 
   function handleDateClick(e) {
@@ -160,9 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!cell) return;
     document.querySelectorAll('.date-cell.bg-blue-200, .date-cell.bg-blue-600').forEach(c => {
       c.classList.remove('bg-blue-200', 'bg-blue-600', 'text-white');
-      if (c.classList.contains('is-today')) c.classList.add('bg-blue-500', 'text-white');
+      if (c.classList.contains('is-today')) c.classList.add('bg-blue-500', 'text-white'); // (UI)
     });
-    cell.classList.add('bg-blue-600', 'text-white');
+    cell.classList.add('bg-blue-600', 'text-white'); // (UI)
     if (cell.classList.contains('is-today')) cell.classList.remove('bg-blue-500');
     selectedDate = cell.dataset.date;
     if (dailyScheduleContainer) dailyScheduleContainer.classList.remove('hidden');
@@ -181,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (slotType === 'empty') {
       showEventDetailView('create');
       const dt = document.getElementById('create-event-date-time');
-      if (dt) dt.textContent = `${formatKoreanDate(selectedDate)} ${selectedTimeSlot}`;
+      if (dt) dt.textContent = `${formatKoreanDate(selectedDate)} ${selectedTimeSlot}`; // (I18N)
 
       const allSlots = Array.from(scheduleSlotsContainer.querySelectorAll('.time-slot'));
       const clickedIndex = allSlots.findIndex(s => s.dataset.time === selectedTimeSlot);
@@ -203,11 +216,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const endTime = new Date(`${selectedDate}T${eventData.time}`);
       endTime.setMinutes(endTime.getMinutes() + eventData.duration);
       const endTimeStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-      const timeDisplay = `${eventData.time} - ${endTimeStr} (${eventData.duration}분)`;
-      const participantsDisplay = `${eventData.current}명 / ${eventData.max}명`;
+      const timeDisplay = `${eventData.time} - ${endTimeStr} (${eventData.duration}분)`; // (I18N)
+      const participantsDisplay = `${eventData.current}명 / ${eventData.max}명`;         // (I18N)
       const creatorIdDisplay = eventData.creator?.id ?? '';
       const creatorContactDisplay = eventData.creator?.phone ?? '';
-      const dateDisplay = formatKoreanDate(selectedDate);
+      const dateDisplay = formatKoreanDate(selectedDate);                                  // (I18N)
 
       if (slotType === 'available') {
         showEventDetailView('available');
@@ -229,15 +242,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function handleCreateEvent() {
     if (!selectedDate || !selectedTimeSlot || !selectedDuration)
-      return showAlert("날짜, 시간, 진행 시간을 선택해주세요.");
+      return showAlert("날짜, 시간, 진행 시간을 선택해주세요."); // (I18N)
 
     const minParticipants = document.getElementById('min-participants').value;
     const maxParticipants = document.getElementById('max-participants').value;
 
     if (+minParticipants > +maxParticipants)
-      return showAlert("최소 인원은 최대 인원보다 많을 수 없습니다.");
+      return showAlert("최소 인원은 최대 인원보다 많을 수 없습니다."); // (I18N)
     if (+minParticipants <= 0 || +maxParticipants <= 0)
-      return showAlert("참여 인원은 1명 이상이어야 합니다.");
+      return showAlert("참여 인원은 1명 이상이어야 합니다.");         // (I18N)
 
     showLoader();
     try {
@@ -257,17 +270,17 @@ document.addEventListener('DOMContentLoaded', () => {
         showEventDetailView('none');
         await renderDailySchedule(selectedDate);
       } else {
-        showAlert(result.message || "모임 생성에 실패했습니다.");
+        showAlert(result.message || "모임 생성에 실패했습니다."); // (I18N)
       }
     } catch (error) {
-      if (error.message !== 'Unauthorized') showAlert("모임 생성에 실패했습니다.");
+      if (error.message !== 'Unauthorized') showAlert("모임 생성에 실패했습니다."); // (I18N)
     } finally {
       hideLoader();
     }
   }
 
   async function handleSignupEvent() {
-    if (!selectedEventId) return showAlert("선택된 모임이 없습니다.");
+    if (!selectedEventId) return showAlert("선택된 모임이 없습니다."); // (I18N)
     showLoader();
     try {
       const response = await authedFetch(`/api/events/${selectedEventId}/signup`, { method: 'POST' });
@@ -277,10 +290,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showEventDetailView('none');
         await renderDailySchedule(selectedDate);
       } else {
-        showAlert(result.message || "참가 신청에 실패했습니다.");
+        showAlert(result.message || "참가 신청에 실패했습니다."); // (I18N)
       }
     } catch (error) {
-      if (error.message !== 'Unauthorized') showAlert("참가 신청에 실패했습니다.");
+      if (error.message !== 'Unauthorized') showAlert("참가 신청에 실패했습니다."); // (I18N)
     } finally {
       hideLoader();
     }
@@ -317,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const btn = e.target.closest('.duration-btn');
           if (!btn || btn.disabled) return;
           document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
-          btn.classList.add('bg-blue-500', 'text-white');
+          btn.classList.add('bg-blue-500', 'text-white'); // (UI)
           selectedDuration = btn.dataset.duration;
         });
       }
@@ -332,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       if (error.message !== 'Unauthorized') {
         console.error("Initialization failed:", error);
-        showAlert("페이지 초기화에 실패했습니다.");
+        showAlert("페이지 초기화에 실패했습니다."); // (I18N)
       }
     } finally {
       hideLoader();

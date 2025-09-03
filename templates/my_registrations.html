@@ -3,66 +3,293 @@
 {% block title %}나의 예약 현황 - Court-Kok{% endblock %}
 
 {% block content %}
-<div class="w-full max-w-4xl mx-auto flex flex-col" style="min-height: 80vh;">
-    {% include 'includes/header.html' %}
+<div class="w-full max-w-5xl mx-auto flex flex-col" style="min-height: 80vh;">
+  {% include 'includes/header.html' %}
 
-    <main class="bg-white p-6 rounded-lg shadow-md flex-grow">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">나의 예약 현황</h1>
+  <main class="bg-white p-6 md:p-8 rounded-2xl shadow-lg flex-grow">
+    <div class="flex items-center justify-between gap-3 mb-6">
+      <h1 class="text-3xl font-bold text-gray-900 border-b pb-2 flex-1">나의 예약 현황</h1>
+      <!-- 새로고침 (NEW) -->
+      <button id="refresh-btn"
+              class="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0014-7 9 9 0 00-9-9"/>
+        </svg>
+        새로고침
+      </button>
+    </div>
 
-        <section class="mb-8">
-            <h2 class="text-2xl font-semibold text-gray-700 mb-4">내가 만든 모임</h2>
-            <div id="created-events-container" class="space-y-4">
-                <p class="text-gray-500">데이터를 불러오는 중입니다...</p>
-            </div>
-        </section>
+    <!-- 필터 탭 (NEW) -->
+    <div class="mb-8">
+      <div class="inline-flex rounded-xl border border-gray-200 p-1 bg-gray-50">
+        <button data-filter="upcoming"
+                class="filter-tab px-4 py-2 text-sm font-medium rounded-lg bg-white shadow-sm">다가올 모임</button>
+        <button data-filter="past"
+                class="filter-tab px-4 py-2 text-sm font-medium rounded-lg text-gray-600">지난 모임</button>
+        <button data-filter="all"
+                class="filter-tab px-4 py-2 text-sm font-medium rounded-lg text-gray-600">전체</button>
+      </div>
+    </div>
 
-        <section>
-            <h2 class="text-2xl font-semibold text-gray-700 mb-4">내가 참여할 모임</h2>
-            <div id="attended-events-container" class="space-y-4">
-                <p class="text-gray-500">데이터를 불러오는 중입니다...</p>
-            </div>
-        </section>
-    </main>
+    <!-- 두 섹션을 반응형 그리드로 (UI) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <section>
+        <h2 class="text-2xl font-semibold text-gray-900 mb-4">내가 만든 모임</h2>
+        <div id="created-events-container" class="space-y-4">
+          <!-- 스켈레톤 로더 (NEW) -->
+          <div class="animate-pulse space-y-3">
+            <div class="h-24 bg-blue-50/60 rounded-xl"></div>
+            <div class="h-24 bg-blue-50/60 rounded-xl"></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-2xl font-semibold text-gray-900 mb-4">내가 참여할 모임</h2>
+        <div id="attended-events-container" class="space-y-4">
+          <!-- 스켈레톤 로더 (NEW) -->
+          <div class="animate-pulse space-y-3">
+            <div class="h-24 bg-green-50/60 rounded-xl"></div>
+            <div class="h-24 bg-green-50/60 rounded-xl"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // --- UI Elements ---
-  const createdEventsContainer = document.getElementById('created-events-container');
-  const attendedEventsContainer = document.getElementById('attended-events-container');
+  // --- Elements ---
+  const createdBox   = document.getElementById('created-events-container');
+  const attendedBox  = document.getElementById('attended-events-container');
+  const refreshBtn   = document.getElementById('refresh-btn');
+  const filterTabs   = Array.from(document.querySelectorAll('.filter-tab'));
+
+  // --- State (NEW) ---
+  const state = {
+    created: [],
+    attended: [],
+    filter: 'upcoming', // upcoming | past | all
+  };
 
   // --- Helpers ---
   const escapeHtml = (s) => String(s ?? '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
-  const sendGetMyRegistrations = () => {
+  // 날짜/시간 → KST Date 객체 (NEW)
+  function toKstDate(dateStr, timeStr) {
+    if (!dateStr) return null;
+    const t = (timeStr || '00:00').padStart(5, '0'); // HH:mm
+    // KST(+09:00) 기준으로 파싱
+    const iso = `${dateStr}T${t}:00+09:00`;
+    const dt = new Date(iso);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // 다가올/지난 필터 판정 (NEW)
+  function isUpcoming(dt) {
+    if (!dt) return false;
+    const now = new Date();
+    // "오늘 일정"은 다가올로 취급
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return dt >= todayStart;
+  }
+
+  // D-Day 뱃지 텍스트 (NEW)
+  function ddayLabel(dt) {
+    if (!dt) return '';
+    const now = new Date();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startThat  = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    const diff = Math.round((startThat - startToday) / oneDay);
+    if (diff === 0) return 'D-Day';
+    if (diff > 0)  return `D-${diff}`;
+    return `D+${Math.abs(diff)}`;
+  }
+
+  // 읽기 좋은 시간 라벨 (NEW)
+  function prettyDateTime(dt) {
+    if (!dt) return '-';
+    // 아시아/서울 포맷
+    try {
+      return new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        weekday: 'short', hour: '2-digit', minute: '2-digit'
+      }).format(dt);
+    } catch {
+      return dt.toLocaleString();
+    }
+  }
+
+  // 스켈레톤 로더 표시 (NEW)
+  function showSkeleton() {
+    createdBox.innerHTML = `
+      <div class="animate-pulse space-y-3">
+        <div class="h-24 bg-blue-50/60 rounded-xl"></div>
+        <div class="h-24 bg-blue-50/60 rounded-xl"></div>
+      </div>`;
+    attendedBox.innerHTML = `
+      <div class="animate-pulse space-y-3">
+        <div class="h-24 bg-green-50/60 rounded-xl"></div>
+        <div class="h-24 bg-green-50/60 rounded-xl"></div>
+      </div>`;
+  }
+
+  // 공통 카드 렌더러 (색상만 분기) (NEW)
+  function renderCard(ev, scheme) {
+    // scheme: 'blue' | 'green'
+    const dt = toKstDate(ev.date, ev.time);
+    const badge = ddayLabel(dt);
+    const countNow = Array.isArray(ev.participants) ? ev.participants.length : 0;
+
+    const accent = scheme === 'blue'
+      ? { ring: 'ring-blue-200', title: 'text-blue-700', chip: 'bg-blue-100 text-blue-700' }
+      : { ring: 'ring-green-200', title: 'text-green-700', chip: 'bg-green-100 text-green-700' };
+
+    return `
+      <div class="rounded-xl border border-gray-200 ring-1 ${accent.ring} bg-white overflow-hidden">
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="font-bold ${accent.title}">
+                ${escapeHtml(ev.date)} · ${escapeHtml(ev.time)}
+              </p>
+              <p class="text-sm text-gray-600 mt-1">${prettyDateTime(dt)}</p>
+              <div class="mt-2 flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full ${accent.chip}">
+                  ${badge}
+                </span>
+                <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+                  ${escapeHtml(ev.duration)}분
+                </span>
+                <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+                  ${countNow} / ${escapeHtml(ev.max_participants)}명
+                </span>
+              </div>
+            </div>
+            <!-- 액션 -->
+            ${
+              scheme === 'blue'
+              ? `<button class="delete-btn text-xs md:text-sm bg-gray-800 hover:bg-black text-white font-semibold py-2 px-3 md:px-4 rounded-lg"
+                         data-event-id="${escapeHtml(ev._id)}">모임 삭제</button>`
+              : `<button class="cancel-btn text-xs md:text-sm bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-3 md:px-4 rounded-lg"
+                         data-event-id="${escapeHtml(ev._id)}">예약 취소</button>`
+            }
+          </div>
+
+          <!-- 상세 (참가자/주최자) -->
+          <div class="mt-4 pt-4 border-t">
+            ${
+              scheme === 'blue'
+              ? renderParticipants(ev)
+              : renderHost(ev)
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderParticipants(ev) {
+    const parts = Array.isArray(ev.participants_details) ? ev.participants_details : [];
+    if (parts.length === 0) {
+      return `<p class="text-sm text-gray-500">참가자가 아직 없습니다.</p>`;
+    }
+    // 5명 초과 시 접기/펼치기 (NEW)
+    const preview = parts.slice(0,5).map(p =>
+      `<li>${escapeHtml(p.name)} (${escapeHtml(p.id)}) - ${escapeHtml(p.phone)}</li>`
+    ).join('');
+    const rest = parts.slice(5).map(p =>
+      `<li>${escapeHtml(p.name)} (${escapeHtml(p.id)}) - ${escapeHtml(p.phone)}</li>`
+    ).join('');
+    const hasMore = parts.length > 5;
+    const moreHtml = hasMore
+      ? `<ul class="list-disc list-inside text-sm text-gray-600 hidden" data-more="list">${rest}</ul>
+         <button type="button" class="mt-2 text-sm text-blue-600 hover:underline" data-more="toggle">더 보기</button>`
+      : '';
+    return `
+      <h4 class="font-semibold text-gray-800">참가자 목록</h4>
+      <ul class="list-disc list-inside mt-2 text-sm text-gray-600">${preview}</ul>
+      ${moreHtml}
+    `;
+  }
+
+  function renderHost(ev) {
+    const cd = ev.creator_details || {};
+    const hostLine = `${escapeHtml(cd.name ?? 'N/A')} (${escapeHtml(cd.id ?? 'N/A')}) - ${escapeHtml(cd.phone ?? 'N/A')}`;
+    return `
+      <h4 class="font-semibold text-gray-800">주최자 정보</h4>
+      <p class="text-sm text-gray-600 mt-2">${hostLine}</p>
+    `;
+  }
+
+  // 필터 적용 후 전체 렌더 (NEW)
+  function renderLists() {
+    createdBox.innerHTML = '';
+    attendedBox.innerHTML = '';
+
+    const created = (Array.isArray(state.created) ? state.created : [])
+      .slice()
+      .sort((a,b) => (toKstDate(a.date,a.time) - toKstDate(b.date,b.time)));
+    const attended = (Array.isArray(state.attended) ? state.attended : [])
+      .slice()
+      .sort((a,b) => (toKstDate(a.date,a.time) - toKstDate(b.date,b.time)));
+
+    const filteredCreated = created.filter(ev => {
+      const dt = toKstDate(ev.date, ev.time);
+      if (state.filter === 'all') return true;
+      return state.filter === 'upcoming' ? isUpcoming(dt) : !isUpcoming(dt);
+    });
+    const filteredAttended = attended.filter(ev => {
+      const dt = toKstDate(ev.date, ev.time);
+      if (state.filter === 'all') return true;
+      return state.filter === 'upcoming' ? isUpcoming(dt) : !isUpcoming(dt);
+    });
+
+    if (filteredCreated.length === 0) {
+      createdBox.innerHTML = `<p class="text-gray-500">표시할 모임이 없습니다.</p>`;
+    } else {
+      for (const ev of filteredCreated) {
+        createdBox.insertAdjacentHTML('beforeend', renderCard(ev, 'blue'));
+      }
+    }
+
+    if (filteredAttended.length === 0) {
+      attendedBox.innerHTML = `<p class="text-gray-500">표시할 모임이 없습니다.</p>`;
+    } else {
+      for (const ev of filteredAttended) {
+        attendedBox.insertAdjacentHTML('beforeend', renderCard(ev, 'green'));
+      }
+    }
+  }
+
+  // --- WS & API ---
+  function sendGetMyRegistrations() {
     if (!window.ws || ws.readyState !== WebSocket.OPEN) return;
     showLoader();
     ws.send(JSON.stringify({ action: 'get_my_registrations' }));
-    // 7s timeout: 응답이 없으면 로더 해제 및 안내
+    // 타임아웃(UX)
     const timeoutMs = 7000;
     const marker = Symbol('loading');
-    createdEventsContainer._loadingMarker = marker;
+    createdBox._loadingMarker = marker;
     setTimeout(() => {
-      if (createdEventsContainer._loadingMarker === marker) {
+      if (createdBox._loadingMarker === marker) {
         hideLoader();
-        // 여전히 로딩 문구면 교체
-        if (createdEventsContainer.innerText.includes('데이터를 불러오는 중입니다')) {
-          createdEventsContainer.innerHTML = `<p class="text-gray-500">데이터를 불러오지 못했습니다. 새로고침해 주세요.</p>`;
-        }
-        if (attendedEventsContainer.innerText.includes('데이터를 불러오는 중입니다')) {
-          attendedEventsContainer.innerHTML = `<p class="text-gray-500">데이터를 불러오지 못했습니다. 새로고침해 주세요.</p>`;
-        }
+        createdBox.innerHTML  = `<p class="text-gray-500">데이터를 불러오지 못했습니다. 새로고침해 주세요.</p>`;
+        attendedBox.innerHTML = `<p class="text-gray-500">데이터를 불러오지 못했습니다. 새로고침해 주세요.</p>`;
         showAlert('예약 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
       }
     }, timeoutMs);
-  };
+  }
 
-  // --- WebSocket Logic ---
-  // base.html에서 ws 전역과 connectWebSocket()이 정의되어 있다고 가정
+  // base.html에 connectWebSocket()/ws 전역 가정
   if (typeof connectWebSocket === 'function') {
     connectWebSocket();
   } else {
@@ -74,9 +301,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  // 공존 가능하도록 addEventListener 사용
-  ws.addEventListener('open', () => {
-    sendGetMyRegistrations();
+  ws.addEventListener('open', sendGetMyRegistrations);
+  ws.addEventListener('close', () => {
+    // 연결 끊김 안내 (NEW)
+    console.warn('웹소켓 연결이 종료되었습니다.');
   });
 
   ws.addEventListener('message', (event) => {
@@ -85,10 +313,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     switch (data.type) {
       case 'my_registrations_data': {
-        renderMyRegistrations(data.created_events, data.attended_events);
-        // timeout 마커 해제
-        createdEventsContainer._loadingMarker = undefined;
+        state.created  = Array.isArray(data.created_events)  ? data.created_events  : [];
+        state.attended = Array.isArray(data.attended_events) ? data.attended_events : [];
+        createdBox._loadingMarker = undefined;
         hideLoader();
+        renderLists(); // (NEW) 필터 반영 렌더
         break;
       }
       case 'event_update': {
@@ -97,91 +326,57 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
       }
       default:
-        // 다른 타입은 무시(기존 핸들러와 공존)
         break;
     }
   });
 
-  // --- UI Rendering ---
-  function renderMyRegistrations(createdEvents, attendedEvents) {
-    createdEventsContainer.innerHTML = '';
-    attendedEventsContainer.innerHTML = '';
+  // --- Interactions ---
+  // 필터 탭 (NEW)
+  filterTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      filterTabs.forEach(t => t.classList.remove('bg-white','shadow-sm','text-gray-900'));
+      filterTabs.forEach(t => t.classList.add('text-gray-600'));
+      tab.classList.add('bg-white','shadow-sm');
+      tab.classList.remove('text-gray-600');
+      state.filter = tab.dataset.filter;
+      renderLists();
+    });
+  });
 
-    // 내가 만든 모임
-    const created = Array.isArray(createdEvents) ? createdEvents : [];
-    if (created.length === 0) {
-      createdEventsContainer.innerHTML = `<p class="text-gray-500">만든 모임이 없습니다.</p>`;
-    } else {
-      created.forEach(ev => {
-        const parts = Array.isArray(ev.participants_details) ? ev.participants_details : [];
-        const participantsHtml = parts.length
-          ? parts.map(p => `<li>${escapeHtml(p.name)} (${escapeHtml(p.id)}) - ${escapeHtml(p.phone)}</li>`).join('')
-          : '<li>참가자가 아직 없습니다.</li>';
-
-        const countNow = Array.isArray(ev.participants) ? ev.participants.length : 0;
-        const card = `
-          <div class="border rounded-lg p-4 bg-blue-50">
-            <div class="flex justify-between items-start">
-              <div>
-                <p class="font-bold text-lg text-blue-600">${escapeHtml(ev.date)} @ ${escapeHtml(ev.time)}</p>
-                <p class="text-sm text-gray-600">진행 시간: ${escapeHtml(ev.duration)}분</p>
-                <p class="text-sm text-gray-600">참여 인원: ${countNow} / ${escapeHtml(ev.max_participants)}명</p>
-              </div>
-              <button class="delete-btn text-sm bg-gray-700 hover:bg-black text-white font-semibold py-2 px-4 rounded-lg"
-                data-event-id="${escapeHtml(ev._id)}">모임 삭제</button>
-            </div>
-            <div class="mt-4 pt-4 border-t">
-              <h4 class="font-semibold text-gray-700">참가자 목록:</h4>
-              <ul class="list-disc list-inside mt-2 text-sm text-gray-600">${participantsHtml}</ul>
-            </div>
-          </div>`;
-        createdEventsContainer.insertAdjacentHTML('beforeend', card);
-      });
-    }
-
-    // 내가 참여할 모임
-    const attended = Array.isArray(attendedEvents) ? attendedEvents : [];
-    if (attended.length === 0) {
-      attendedEventsContainer.innerHTML = `<p class="text-gray-500">참여 신청한 모임이 없습니다.</p>`;
-    } else {
-      attended.forEach(ev => {
-        const countNow = Array.isArray(ev.participants) ? ev.participants.length : 0;
-        const cd = ev.creator_details || {};
-        const hostLine = `${escapeHtml(cd.name ?? 'N/A')} (${escapeHtml(cd.id ?? 'N/A')}) - ${escapeHtml(cd.phone ?? 'N/A')}`;
-
-        const card = `
-          <div class="border rounded-lg p-4 bg-green-50">
-            <div class="flex justify-between items-start">
-              <div>
-                <p class="font-bold text-lg text-green-600">${escapeHtml(ev.date)} @ ${escapeHtml(ev.time)}</p>
-                <p class="text-sm text-gray-600">진행 시간: ${escapeHtml(ev.duration)}분</p>
-                <p class="text-sm text-gray-600">참여 인원: ${countNow} / ${escapeHtml(ev.max_participants)}명</p>
-              </div>
-              <button class="cancel-btn text-sm bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg"
-                data-event-id="${escapeHtml(ev._id)}">예약 취소</button>
-            </div>
-            <div class="mt-4 pt-4 border-t">
-              <h4 class="font-semibold text-gray-700">주최자 정보:</h4>
-              <p class="text-sm text-gray-600 mt-1">${hostLine}</p>
-            </div>
-          </div>`;
-        attendedEventsContainer.insertAdjacentHTML('beforeend', card);
-      });
-    }
+  // 새로고침 (NEW)
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      showSkeleton();
+      sendGetMyRegistrations();
+    });
   }
 
-  // --- Event Listeners for Buttons ---
-  createdEventsContainer.addEventListener('click', async (e) => {
+  // 참가자 더보기 토글 (NEW, 이벤트 위임)
+  [createdBox, attendedBox].forEach(box => {
+    box.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-more="toggle"]');
+      if (!btn) return;
+      const list = btn.parentElement.querySelector('[data-more="list"]');
+      if (list) {
+        const opened = !list.classList.contains('hidden');
+        list.classList.toggle('hidden');
+        btn.textContent = opened ? '더 보기' : '접기';
+      }
+    });
+  });
+
+  // 버튼 액션: 삭제/취소 (기존 로직 유지, 텍스트만 다듬음)
+  createdBox.addEventListener('click', async (e) => {
     const btn = e.target.closest('.delete-btn');
     if (!btn) return;
-    if (!confirm('모임을 완전히 삭제합니다. 정말 삭제하시겠습니까?')) return;
+    if (!confirm('이 모임을 완전히 삭제합니다. 계속할까요?')) return;
 
     showLoader();
     try {
       const eventId = btn.dataset.eventId;
       const response = await authedFetch(`/api/events/${eventId}`, { method: 'DELETE' });
       const result = await response.json().catch(() => ({}));
-      showAlert(result.message ?? '요청이 처리되었습니다.');
+      showAlert(result.message ?? '모임이 삭제되었습니다.');
       // 성공 시 서버가 event_update 방송 → WS가 자동으로 재로딩
     } catch (err) {
       showAlert('삭제에 실패했습니다. 다시 시도해 주세요.');
@@ -190,17 +385,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  attendedEventsContainer.addEventListener('click', async (e) => {
+  attendedBox.addEventListener('click', async (e) => {
     const btn = e.target.closest('.cancel-btn');
     if (!btn) return;
-    if (!confirm('정말로 예약을 취소하시겠습니까?')) return;
+    if (!confirm('예약을 취소하시겠습니까?')) return;
 
     showLoader();
     try {
       const eventId = btn.dataset.eventId;
       const response = await authedFetch(`/api/events/${eventId}/signup`, { method: 'DELETE' });
       const result = await response.json().catch(() => ({}));
-      showAlert(result.message ?? '요청이 처리되었습니다.');
+      showAlert(result.message ?? '예약이 취소되었습니다.');
       // 성공 시 서버가 event_update 방송 → WS가 자동으로 재로딩
     } catch (err) {
       showAlert('예약 취소에 실패했습니다. 다시 시도해 주세요.');

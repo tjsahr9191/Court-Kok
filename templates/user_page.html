@@ -1,69 +1,105 @@
 {% extends "base.html" %}
 
-{% block title %}My Info - Court-Kok{% endblock %}
+{% block title %}내 정보 - Court-Kok{% endblock %}  {# (I18N) #}
 
 {% block content %}
-<div class="w-full max-w-2xl mx-auto flex flex-col" style="min-height: 80vh;">
+<div class="w-full max-w-3xl mx-auto flex flex-col" style="min-height: 80vh;">
   {% include 'includes/header.html' %}
 
-  <main class="bg-white p-8 rounded-lg shadow-md flex-grow">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">My Information</h1>
+  <main class="bg-white p-6 md:p-8 rounded-2xl shadow-lg flex-grow">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6 border-b pb-4">내 정보</h1>  {# (I18N) #}
 
-    <div class="space-y-4">
-      <div class="flex items-center">
-        <label class="w-24 font-semibold text-gray-600">이름:</label>
-        <p class="text-lg text-gray-800">{{ user.name }}</p>
+    {# --- 상단 요약 카드 (UI) --- #}
+    <section class="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+      <div class="h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-xl font-bold select-none">
+        {{ (user.name or 'U')[:1] }}
       </div>
-      <div class="flex items-center">
-        <label class="w-24 font-semibold text-gray-600">아이디:</label>
-        <p class="text-lg text-gray-800">{{ user.id }}</p>
+      <div class="min-w-0">
+        <p class="text-xl font-semibold text-gray-900 truncate">{{ user.name or '-' }}</p>
+        <p class="text-sm text-gray-500 truncate">
+          아이디 {{ user.id or '-' }} · 이메일 {{ user.email or '-' }}
+        </p>
       </div>
-      <div class="flex items-center">
-        <label class="w-24 font-semibold text-gray-600">이메일:</label>
-        <p class="text-lg text-gray-800">{{ user.email }}</p>
-      </div>
-      <div class="flex items-center">
-        <label class="w-24 font-semibold text-gray-600">전화번호:</label>
-        <p class="text-lg text-gray-800">{{ user.phone }}</p>
-      </div>
-    </div>
+    </section>
 
-    <div class="mt-8 pt-6 border-t">
-      <h2 class="text-2xl font-semibold text-gray-700 mb-4">Change Password</h2>
+    {# --- 상세 정보 (UX) --- #}
+    <section class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="p-4 rounded-lg border border-gray-200">
+        <p class="text-sm text-gray-500">이름</p>
+        <p class="mt-1 text-lg text-gray-900">{{ user.name or '-' }}</p>
+      </div>
+      <div class="p-4 rounded-lg border border-gray-200">
+        <p class="text-sm text-gray-500">아이디</p>
+        <p class="mt-1 text-lg text-gray-900">{{ user.id or '-' }}</p>
+      </div>
+      <div class="p-4 rounded-lg border border-gray-200">
+        <p class="text-sm text-gray-500">이메일</p>
+        <p class="mt-1 text-lg text-gray-900 break-all">{{ user.email or '-' }}</p>
+      </div>
+      <div class="p-4 rounded-lg border border-gray-200">
+        <p class="text-sm text-gray-500">전화번호</p>
+        <p class="mt-1 text-lg text-gray-900">{{ user.phone or '-' }}</p>
+      </div>
+    </section>
 
-      <form id="change-password-form" class="space-y-4" novalidate>
+    {# --- 비밀번호 변경 (NEW: 체크리스트/강도바/실시간 검증) --- #}
+    <section class="mt-10 pt-8 border-t">
+      <h2 class="text-2xl font-semibold text-gray-900 mb-4">비밀번호 변경</h2>  {# (I18N) #}
+
+      <form id="change-password-form" class="space-y-5" novalidate>
         <div class="relative">
-          <input type="password" id="current-password" placeholder="Current Password"
-                 class="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+          <label for="current-password" class="sr-only">현재 비밀번호</label>  {# (I18N) #}
+          <input type="password" id="current-password" placeholder="현재 비밀번호"
+                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                  required>
           <button type="button" data-toggle="#current-password"
-                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">Show</button>
+                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 px-2 py-1 rounded hover:bg-gray-100">
+            보기
+          </button>  {# (I18N) #}
         </div>
 
         <div class="relative">
-          <input type="password" id="new-password" placeholder="New Password"
-                 class="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+          <label for="new-password" class="sr-only">새 비밀번호</label>  {# (I18N) #}
+          <input type="password" id="new-password" placeholder="새 비밀번호"
+                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                  minlength="8" required>
           <button type="button" data-toggle="#new-password"
-                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">Show</button>
+                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 px-2 py-1 rounded hover:bg-gray-100">
+            보기
+          </button>  {# (I18N) #}
+          {# 강도 바 (NEW) #}
+          <div class="mt-2 h-1 bg-gray-200 rounded overflow-hidden">
+            <div id="pwd-strength" class="h-1 w-0 bg-red-500 transition-all"></div>
+          </div>
+          {# 체크리스트 (NEW) #}
+          <ul id="pwd-tips" class="mt-2 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1">
+            <li data-rule="len"  class="flex items-center gap-2"><span>•</span> 최소 8자 이상</li>
+            <li data-rule="mix"  class="flex items-center gap-2"><span>•</span> 영문/숫자 혼합 권장</li>
+            <li data-rule="diff" class="flex items-center gap-2"><span>•</span> 현재 비밀번호와 달라야 함</li>
+          </ul>
         </div>
 
         <div class="relative">
-          <input type="password" id="confirm-password" placeholder="Confirm New Password"
-                 class="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+          <label for="confirm-password" class="sr-only">새 비밀번호 확인</label>  {# (I18N) #}
+          <input type="password" id="confirm-password" placeholder="새 비밀번호 확인"
+                 class="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                  required>
           <button type="button" data-toggle="#confirm-password"
-                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">Show</button>
+                  class="toggle-visibility absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 px-2 py-1 rounded hover:bg-gray-100">
+            보기
+          </button>  {# (I18N) #}
+          <p id="confirm-help" class="mt-2 text-sm text-red-600 hidden">새 비밀번호가 일치하지 않습니다.</p>  {# (NEW) #}
         </div>
 
-        <button type="submit"
-                class="w-full bg-green-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-700 transition duration-200">
-          Update Password
-        </button>
+        <button id="pwd-submit" type="submit"
+                class="w-full bg-green-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition">
+          비밀번호 업데이트
+        </button>  {# (I18N) #}
 
-        <p class="text-xs text-gray-500 mt-2">* 비밀번호는 최소 8자 이상을 권장합니다.</p>
+        <p class="text-xs text-gray-500 mt-2">* 보안을 위해 최소 8자 이상을 권장합니다.</p>  {# (I18N) #}
+        <span id="a11y-live" class="sr-only" aria-live="polite"></span>  {# (NEW: 접근성) #}
       </form>
-    </div>
+    </section>
   </main>
 </div>
 {% endblock %}
@@ -79,26 +115,80 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 비밀번호 변경 폼 요소
   const changePasswordForm = document.getElementById('change-password-form');
+  const currentInput = document.getElementById('current-password');
+  const newInput     = document.getElementById('new-password');
+  const confirmInput = document.getElementById('confirm-password');
+  const confirmHelp  = document.getElementById('confirm-help');        // (NEW)
+  const submitBtn    = document.getElementById('pwd-submit');          // (NEW)
+  const tipsBox      = document.getElementById('pwd-tips');            // (NEW)
+  const strengthBar  = document.getElementById('pwd-strength');        // (NEW)
+  const liveRegion   = document.getElementById('a11y-live');           // (NEW)
 
-  // 비밀번호 표시/숨김 토글
+  // 비밀번호 표시/숨김 토글 (I18N)
   document.querySelectorAll('.toggle-visibility').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = document.querySelector(btn.dataset.toggle);
       if (!target) return;
       const isPwd = target.type === 'password';
       target.type = isPwd ? 'text' : 'password';
-      btn.textContent = isPwd ? 'Hide' : 'Show';
+      btn.textContent = isPwd ? '숨기기' : '보기'; // (I18N)
     });
   });
+
+  // 강도/체크리스트 업데이트 (NEW)
+  const updatePwdUI = () => {
+    const curr = currentInput.value;
+    const pwd  = newInput.value;
+
+    // 규칙 체크
+    const okLen  = pwd.length >= 8;
+    const okMix  = /(?=.*[A-Za-z])(?=.*\d)/.test(pwd);
+    const okDiff = !!pwd && pwd !== curr;
+
+    // 체크리스트 표시
+    const setRule = (rule, ok) => {
+      const el = tipsBox.querySelector(`[data-rule="${rule}"]`);
+      if (!el) return;
+      el.classList.toggle('text-green-700', ok);
+      el.classList.toggle('text-gray-600', !ok);
+      el.innerHTML = `${ok ? '✅' : '•'} ${el.textContent.replace(/^✅\s*|•\s*/,'')}`;
+    };
+    setRule('len', okLen);
+    setRule('mix', okMix);
+    setRule('diff', okDiff);
+
+    // 강도 바 계산: 0~4
+    let score = 0;
+    if (okLen) score++;
+    if (okMix) score++;
+    if (/[^\w\s]/.test(pwd)) score++;      // 특수문자 보너스
+    if (pwd.length >= 12) score++;         // 길이 보너스
+
+    const widths = ['w-0','w-1/4','w-2/4','w-3/4','w-full'];
+    strengthBar.className = `h-1 ${widths[score]} ${score<=1 ? 'bg-red-500' : score===2 ? 'bg-yellow-500' : 'bg-green-500'} transition-all`;
+
+    // 일치 여부 즉시 피드백
+    const same = confirmInput.value && (confirmInput.value === pwd);
+    confirmHelp.classList.toggle('hidden', same || !confirmInput.value);
+    confirmInput.classList.toggle('border-red-400', !same && !!confirmInput.value);
+    confirmInput.classList.toggle('focus:ring-red-400', !same && !!confirmInput.value);
+
+    // 접근성 안내
+    if (liveRegion) {
+      const msg = same ? '새 비밀번호가 일치합니다.' : (confirmInput.value ? '새 비밀번호가 일치하지 않습니다.' : '');
+      liveRegion.textContent = msg;
+    }
+  };
+  [currentInput, newInput, confirmInput].forEach(el => el.addEventListener('input', updatePwdUI));
 
   // 비밀번호 변경 제출 (성공 시 자동 로그아웃)
   if (changePasswordForm) {
     changePasswordForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const current_password = document.getElementById('current-password').value.trim();
-      const new_password     = document.getElementById('new-password').value.trim();
-      const confirm_password = document.getElementById('confirm-password').value.trim();
+      const current_password = currentInput.value.trim();
+      const new_password     = newInput.value.trim();
+      const confirm_password = confirmInput.value.trim();
 
       if (!current_password || !new_password || !confirm_password) {
         showAlert('모든 비밀번호 입력란을 채워주세요.');
@@ -118,6 +208,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       showLoader();
+      submitBtn.disabled = true;                 // (NEW)
+      const origText = submitBtn.textContent;    // (NEW)
+      submitBtn.textContent = '처리 중...';       // (NEW)
       try {
         const response = await authedFetch('/api/change_password', {
           method: 'POST',
@@ -127,17 +220,18 @@ document.addEventListener('DOMContentLoaded', () => {
         showAlert(result.message || '비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
 
         if (response.ok) {
-          // ★ 여기서 자동 로그아웃: 쿠키 삭제 + 블록리스트 반영
+          // 자동 로그아웃
           try { await authedFetch('/api/logout', { method: 'POST' }); } catch (_) {}
-          // 잠깐 안내 후 로그인 페이지로 이동
-          setTimeout(() => { window.location.href = '/login'; }, 1200);
+          setTimeout(() => { window.location.href = '/login'; }, 1000);
         }
       } catch (err) {
-        if (err.message !== 'Unauthorized') {
+        if (err?.message !== 'Unauthorized') {
           showAlert('비밀번호 변경 중 오류가 발생했습니다.');
         }
       } finally {
         hideLoader();
+        submitBtn.disabled = false;             // (NEW)
+        submitBtn.textContent = origText;       // (NEW)
       }
     });
   }
