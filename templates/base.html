@@ -52,7 +52,6 @@
 
     alertOkBtn.addEventListener('click', () => hideModal(alertModal));
 
-    // export to window
     window.showLoader = showLoader;
     window.hideLoader = hideLoader;
     window.showAlert  = showAlert;
@@ -63,7 +62,6 @@
     window.authedFetch = async (url, options = {}) => {
       const fetchOptions = { ...options, headers: { ...options.headers } };
       if (options.body) fetchOptions.headers['Content-Type'] = 'application/json';
-      // 쿠키 인증(크로스도메인 대비)
       fetchOptions.credentials = 'include';
       const res = await fetch(url, fetchOptions);
       if (res.status === 401 || res.status === 422) {
@@ -80,39 +78,30 @@
 
     window.connectWebSocket = function connectWebSocket() {
       if (window.ws && (window.ws.readyState === WebSocket.OPEN || window.ws.readyState === WebSocket.CONNECTING)) {
-        console.log('WebSocket already connecting/connected.');
         return;
       }
-
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
       window.ws = socket;
-
       socket.addEventListener('open', () => {
         console.log('WebSocket connection established.');
-        window.dispatchEvent(new Event('ws:open')); // 페이지에서 후킹 가능
+        window.dispatchEvent(new Event('ws:open'));
       });
-
       socket.addEventListener('close', () => {
         console.log('WebSocket connection closed. Reconnecting in 5 seconds...');
         setTimeout(window.connectWebSocket, 5000);
       });
-
       socket.addEventListener('error', (err) => {
         console.error('WebSocket error:', err);
         try { socket.close(); } catch (_) {}
       });
-
-      // 기본 onmessage (페이지별로 addEventListener로 추가 핸들러 사용 권장)
       socket.addEventListener('message', (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'event_update') {
             console.log(`Update for date ${data.date} received. Page should handle this.`);
           }
-        } catch {
-          // ignore
-        }
+        } catch {}
       });
     };
 
@@ -131,9 +120,14 @@
       const notifLinkDesktop  = document.getElementById('notifications-link-desktop');
       const notifLinkMobile   = document.getElementById('notifications-link-mobile');
 
-      // 헤더가 존재할 때만 초기화
+      // ================= ⬇️ 모바일 메뉴를 위한 변수 추가 ⬇️ =================
+      const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+      const mobileMenuCloseBtn = document.getElementById('mobile-menu-close-btn');
+      const mobileMenu = document.getElementById('mobile-menu');
+      const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
+      // ====================================================================
+
       if (userNameDisplay || userMenu || userMenuDropdown || logoutBtn) {
-        // 사용자 이름 및 알림 채우기
         (async () => {
           try {
             const res = await authedFetch('/api/user_info');
@@ -153,26 +147,61 @@
               }
             }
           } catch (e) {
-            // 401/422는 authedFetch가 처리
             console.debug('Header user_info fetch failed', e);
           }
         })();
 
-        // 드롭다운 토글
+        // ================= ⬇️ 드롭다운 로직 수정 (애니메이션 추가) ⬇️ =================
         if (userMenu && userMenuDropdown) {
-          userMenu.addEventListener('click', () => {
-            userMenuDropdown.classList.toggle('hidden');
+          userMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = userMenuDropdown.classList.contains('hidden');
+            if (isHidden) {
+                userMenuDropdown.classList.remove('hidden');
+                setTimeout(() => {
+                    userMenuDropdown.classList.remove('opacity-0', 'scale-95');
+                }, 10);
+            } else {
+                userMenuDropdown.classList.add('opacity-0', 'scale-95');
+                setTimeout(() => {
+                    userMenuDropdown.classList.add('hidden');
+                }, 300);
+            }
           });
-          document.addEventListener('click', (e) => {
-            if (!userMenu.contains(e.target)) userMenuDropdown.classList.add('hidden');
+          document.addEventListener('click', () => {
+            if (!userMenuDropdown.classList.contains('hidden')) {
+                userMenuDropdown.classList.add('opacity-0', 'scale-95');
+                setTimeout(() => {
+                    userMenuDropdown.classList.add('hidden');
+                }, 300);
+            }
           });
         }
-        
-        // 알림 링크 클릭 시 읽음 처리
+        // =============================================================================
+
+        // ================= ⬇️ 모바일 메뉴 열기/닫기 로직 추가 ⬇️ =================
+        const openMobileMenu = () => {
+            if (mobileMenuOverlay) mobileMenuOverlay.classList.remove('hidden');
+            if (mobileMenu) mobileMenu.classList.remove('translate-x-full');
+        };
+
+        const closeMobileMenu = () => {
+            if (mobileMenu) mobileMenu.classList.add('translate-x-full');
+            if (mobileMenuOverlay) {
+                setTimeout(() => {
+                    mobileMenuOverlay.classList.add('hidden');
+                }, 300);
+            }
+        };
+
+        if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', openMobileMenu);
+        if (mobileMenuCloseBtn) mobileMenuCloseBtn.addEventListener('click', closeMobileMenu);
+        if (mobileMenuOverlay) mobileMenuOverlay.addEventListener('click', closeMobileMenu);
+        // =========================================================================
+
         const handleNotifClick = async (e) => {
             e.preventDefault();
             try {
-                // 백그라운드에서 조용히 처리, 성공 여부와 관계없이 페이지 이동
                 authedFetch('/api/notifications/mark_read', { method: 'POST' });
             } finally {
                 window.location.href = e.currentTarget.href;
@@ -181,14 +210,12 @@
         if(notifLinkDesktop) notifLinkDesktop.addEventListener('click', handleNotifClick);
         if(notifLinkMobile) notifLinkMobile.addEventListener('click', handleNotifClick);
 
-        // 로그아웃
         const handleLogout = async (e) => {
             e.preventDefault();
             showLoader();
             try {
               await authedFetch('/api/logout', { method: 'POST' });
             } catch (_) {
-              // ignore
             } finally {
               hideLoader();
               window.location.href = '/login';

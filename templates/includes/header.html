@@ -1,79 +1,71 @@
-<header class="bg-white w-full p-4 mb-6 rounded-lg shadow-md">
-  <nav class="flex items-center justify-between max-w-screen-xl mx-auto gap-4">
-    <a href="/" class="text-2xl font-bold text-blue-600 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
-      Court-Kok
-      <span class="sr-only">홈으로 이동</span>
+<header class="bg-white w-full p-4 mb-6 rounded-lg shadow-md sticky top-4 z-30">
+  <nav class="flex items-center justify-between max-w-screen-xl mx-auto">
+    <a href="/" class="flex items-center gap-2 text-2xl font-bold text-gray-800 hover:opacity-80 transition-opacity duration-300">
+      <svg class="w-7 h-7 text-orange-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM8.663 4.502c.083.023.164.048.244.074a13.92 13.92 0 014.186 0c.08-.026.16-.051.244-.074A9.754 9.754 0 0012 2.25c-.803 0-1.58.108-2.32.313a14.022 14.022 0 01-1.017 1.939zM6.373 6.373a14.022 14.022 0 011.94-1.018A9.754 9.754 0 002.25 12c0 .803.108 1.58.313 2.32a14.022 14.022 0 011.94 1.018 14.022 14.022 0 01-1.018-1.94A9.754 9.754 0 0012 21.75c.803 0 1.58-.108 2.32-.313a14.022 14.022 0 011.018-1.94 14.022 14.022 0 01-1.94 1.018A9.754 9.754 0 0021.75 12c0-.803-.108-1.58-.313-2.32a14.022 14.022 0 01-1.018-1.94 14.022 14.022 0 011.94-1.018A9.754 9.754 0 0012 2.25c-.803 0-1.58.108-2.32.313a14.022 14.022 0 01-1.018 1.94z" clip-rule="evenodd" />
+      </svg>
+      <span class="text-blue-600">Court-Kok</span>
     </a>
 
-    <input id="nav-open" type="checkbox" class="peer hidden md:hidden" />
-    <label for="nav-open"
-           class="md:hidden inline-flex items-center justify-center p-2 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-           aria-label="메뉴 열기/닫기">
-      <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M4 6h16M4 12h16M4 18h16"/>
-      </svg>
-    </label>
-
-    <div class="hidden md:flex items-center gap-6 peer-checked:flex">
-      <a href="/notifications" id="notifications-link-desktop"
-         class="font-medium transition duration-200 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
-                {{ 'text-blue-600' if request.path.startswith('/notifications') else 'text-gray-700 hover:text-blue-600' }}">
-        알림<span id="notification-count-desktop" class="hidden font-bold text-red-500 ml-1"></span>
+    <div class="hidden md:flex items-center gap-2">
+      <a href="/notifications" id="notifications-link-desktop" class="px-3 py-1.5 rounded-lg text-base font-medium tracking-tight transition-all duration-200 {{ 'text-blue-600 bg-blue-50' if request.path.startswith('/notifications') else 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' }}">
+        알림<span id="notification-count-desktop" class="hidden font-bold text-red-500 ml-1.5"></span>
       </a>
-      <a href="/my_registrations"
-         class="font-medium transition duration-200 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
-                {{ 'text-blue-600' if request.path.startswith('/my_registrations') else 'text-gray-700 hover:text-blue-600' }}">
-        내 등록 목록
+      <a href="/my_registrations" class="px-3 py-1.5 rounded-lg text-base font-medium tracking-tight transition-all duration-200 {{ 'text-blue-600 bg-blue-50' if request.path.startswith('/my_registrations') else 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' }}">
+        모임 목록
       </a>
 
-      <div class="relative">
-        <div id="user-menu"
-             class="flex items-center gap-2 cursor-pointer px-2 py-1 rounded-md border border-transparent hover:border-gray-200
-                    focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-             aria-haspopup="menu" aria-expanded="false">
-          <span id="user-name-display" class="font-medium text-gray-800">사용자</span>
-          <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24" aria-hidden="true">
+      <div class="relative ml-4">
+        <button id="user-menu" class="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-gray-100 transition-colors duration-200" aria-haspopup="true" aria-expanded="false">
+          <span id="user-name-display" class="font-semibold text-gray-800">사용자</span>
+          <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
-        </div>
-
-        <div id="user-menu-dropdown"
-             class="absolute right-0 mt-2 w-52 bg-white rounded-md shadow-xl border border-gray-100 z-20 hidden"
-             role="menu" aria-labelledby="user-menu">
-          <a href="/user_page"
-             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-md"
-             role="menuitem">내 정보</a>
-          <a href="#" id="logout-btn"
-             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-b-md"
-             role="menuitem">로그아웃</a>
+        </button>
+        <div id="user-menu-dropdown" class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border z-20 hidden transition-all duration-300 ease-in-out transform opacity-0 scale-95" role="menu">
+          <a href="/user_page" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg" role="menuitem">내 정보</a>
+          <a href="#" id="logout-btn" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-b-lg" role="menuitem">로그아웃</a>
         </div>
       </div>
+    </div>
+
+    <div class="md:hidden">
+      <button id="mobile-menu-btn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200" aria-label="메뉴 열기">
+        <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
     </div>
   </nav>
+</header>
 
-  <div class="md:hidden mt-3 hidden peer-checked:block">
-    <div class="max-w-screen-xl mx-auto flex flex-col gap-2">
-      <a href="/notifications" id="notifications-link-mobile"
-         class="block px-3 py-2 rounded-lg border border-gray-200 text-sm
-                {{ 'text-blue-600 bg-blue-50 border-blue-200' if request.path.startswith('/notifications') else 'text-gray-700 hover:bg-gray-50' }}">
-        알림<span id="notification-count-mobile" class="hidden font-bold text-red-500 ml-1"></span>
+<div id="mobile-menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden md:hidden transition-opacity duration-300"></div>
+<div id="mobile-menu" class="fixed top-0 right-0 h-full w-72 bg-white shadow-2xl z-50 transform translate-x-full md:hidden transition-transform duration-300 ease-in-out">
+  <div class="p-4 flex flex-col h-full">
+    <div class="flex items-center justify-between mb-6">
+      <span class="font-bold text-lg text-gray-800" id="user-name-display-mobile">사용자</span>
+      <button id="mobile-menu-close-btn" class="p-2 rounded-lg hover:bg-gray-100" aria-label="메뉴 닫기">
+        <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    <nav class="flex flex-col gap-2">
+      <a href="/notifications" id="notifications-link-mobile" class="flex items-center justify-between px-3 py-2.5 rounded-lg text-base {{ 'text-blue-600 bg-blue-50' if request.path.startswith('/notifications') else 'text-gray-700 hover:bg-gray-50' }}">
+        <span>알림</span>
+        <span id="notification-count-mobile" class="hidden text-sm font-bold text-red-500"></span>
       </a>
-      <a href="/my_registrations"
-         class="block px-3 py-2 rounded-lg border border-gray-200 text-sm
-                {{ 'text-blue-600 bg-blue-50 border-blue-200' if request.path.startswith('/my_registrations') else 'text-gray-700 hover:bg-gray-50' }}">
-        내 등록 목록
+      <a href="/my_registrations" class="px-3 py-2.5 rounded-lg text-base {{ 'text-blue-600 bg-blue-50' if request.path.startswith('/my_registrations') else 'text-gray-700 hover:bg-gray-50' }}">
+        모임 목록
       </a>
-      <div class="flex items-center justify-between px-3 py-2">
-        <span class="text-gray-800 font-medium" id="user-name-display-mobile">사용자</span>
-        <div class="flex gap-2">
-          <a href="/user_page"
-             class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">내 정보</a>
-          <a href="#" id="logout-btn-mobile"
-             class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">로그아웃</a>
-        </div>
-      </div>
+      <a href="/user_page" class="px-3 py-2.5 rounded-lg text-base text-gray-700 hover:bg-gray-50">
+        내 정보
+      </a>
+    </nav>
+    <div class="mt-auto">
+      <a href="#" id="logout-btn-mobile" class="block w-full text-center px-4 py-2.5 rounded-lg text-base text-red-600 bg-red-50 hover:bg-red-100 transition-colors duration-200">
+        로그아웃
+      </a>
     </div>
   </div>
-</header>
+</div>
