@@ -7,11 +7,25 @@
   {% include 'includes/header.html' %}
 
   <main class="flex w-full flex-grow gap-6 md:gap-8">
-    {% include 'includes/calendar_view.html' %}
-    {% include 'includes/daily_schedule.html' %}
-    {% include 'includes/event_details.html' %}
+    <!-- Left column: mini-game + calendar stacked -->
+    <div class="flex flex-col flex-1 gap-6 md:gap-8">
+      {% include 'includes/mini-game.html' %}
+      {% include 'includes/calendar_view.html' %}
+    </div>
+
+    <!-- Middle column -->
+    <div class="flex flex-col flex-1 gap-6 md:gap-8">
+      {% include 'includes/daily_schedule.html' %}
+    </div>
+
+    <!-- Right column -->
+    <div class="flex flex-col flex-1 gap-6 md:gap-8">
+      {% include 'includes/event_details.html' %}
+    </div>
   </main>
 </div>
+
+
 {% endblock %}
 
 {% block scripts %}

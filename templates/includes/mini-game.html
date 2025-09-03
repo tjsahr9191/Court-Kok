@@ -1,0 +1,191 @@
+
+<div style="background-color: #27c393; padding: 10px; border-radius: 12px; border: 4px solid #1c7a61;">
+    <div style="background-color: #1a1a1a; padding: 10px; border-radius: 8px; border: 2px solid #141414;">
+        <canvas id="gameCanvas" width="400" height="230" style="display:block; border-radius:4px;"></canvas>
+    </div>
+    <div style="background-color: #27c393; height: 24px; margin-top: 10px; border-radius: 6px; border: 2px solid #1c7a61; display: flex; justify-content: center; align-items: center; font-family: 'Pixelated', monospace; font-size: 16px; color: #1c7a61;">
+          JUNGLE - MINI PROJECT
+    </div>
+</div>
+<script>
+    const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+    const courtWidth = canvas.width, courtHeight = canvas.height;
+    const gravity = 0.2, friction = 0.9, bounceFactor = 0.7;
+    let ball = {
+        x: courtWidth / 2, y: courtHeight - 50, radius: 15, vx: 0, vy: 0, isDragging: false
+    };
+    const hoop = {
+        x: courtWidth - 50, y: courtHeight / 2, rimWidth: 50, rimHeight: 5, backboardHeight: 40, standWidth: 5
+    };
+    let startDragX = 0, startDragY = 0;
+    let lastMoveTime = Date.now();
+    let showCallout = false;
+
+    // Load a pixelated font
+    const pixelFont = new FontFace('Pixelated', 'url(https://fonts.gstatic.com/s/pressstart2p/v14/8LzyWfge3y6sS6Wp5O9eYgoOjsK9_V0.woff2)');
+    pixelFont.load().then(font => {
+        document.fonts.add(font);
+        gameLoop();
+    });
+
+    function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, courtHeight);
+        gradient.addColorStop(0, '#aed6f1');
+        gradient.addColorStop(1, '#d5f0ff');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, courtWidth, courtHeight);
+        ctx.strokeStyle = '#5d4a34';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, courtHeight);
+        ctx.lineTo(courtWidth, courtHeight);
+        ctx.stroke();
+    }
+
+    function drawHoop() {
+        ctx.fillStyle = '#999';
+        ctx.fillRect(hoop.x, hoop.y - hoop.backboardHeight, 5, hoop.backboardHeight);
+        ctx.fillStyle = 'red';
+        ctx.fillRect(hoop.x - hoop.rimWidth, hoop.y, hoop.rimWidth, hoop.rimHeight);
+        ctx.fillStyle = '#5d4a34';
+        ctx.fillRect(hoop.x, hoop.y, hoop.standWidth, courtHeight - hoop.y);
+    }
+
+    function drawBall() {
+        // Draw the main orange circle
+        ctx.fillStyle = '#ff7f00';
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw the basketball lines
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1.5;
+        
+        ctx.beginPath();
+        ctx.moveTo(ball.x - ball.radius * Math.cos(Math.PI / 4), ball.y - ball.radius * Math.sin(Math.PI / 4));
+        ctx.lineTo(ball.x + ball.radius * Math.cos(Math.PI / 4), ball.y + ball.radius * Math.sin(Math.PI / 4));
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(ball.x - ball.radius * Math.cos(Math.PI / 4), ball.y + ball.radius * Math.sin(Math.PI / 4));
+        ctx.lineTo(ball.x + ball.radius * Math.cos(Math.PI / 4), ball.y - ball.radius * Math.sin(Math.PI / 4));
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(ball.x - ball.radius, ball.y);
+        ctx.lineTo(ball.x + ball.radius, ball.y);
+        ctx.stroke();
+
+        if (showCallout) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillRect(ball.x - 40, ball.y - ball.radius - 30, 80, 20);
+            ctx.fillStyle = '#000';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('move me!', ball.x, ball.y - ball.radius - 15);
+        }
+    }
+
+    function updateBall() {
+        if (ball.isDragging) return;
+        ball.vy += gravity;
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        if (ball.y + ball.radius > courtHeight) {
+            ball.vy = -Math.abs(ball.vy) * bounceFactor;
+            ball.y = courtHeight - ball.radius;
+            ball.vx *= friction;
+        }
+
+        if (ball.x + ball.radius > courtWidth) {
+            ball.vx = -Math.abs(ball.vx) * bounceFactor;
+            ball.x = courtWidth - ball.radius;
+        } else if (ball.x - ball.radius < 0) {
+            ball.vx = Math.abs(ball.vx) * bounceFactor;
+            ball.x = ball.radius;
+        }
+        
+        const isHittingRim = ball.x + ball.radius > hoop.x - hoop.rimWidth && ball.x - ball.radius < hoop.x &&
+                             ball.y + ball.radius > hoop.y && ball.y - ball.radius < hoop.y + hoop.rimHeight;
+        
+        const isHittingBackboard = ball.x + ball.radius > hoop.x && ball.x - ball.radius < hoop.x + hoop.standWidth && 
+                                    ball.y + ball.radius > hoop.y - hoop.backboardHeight && ball.y - ball.radius < hoop.y;
+        
+        if (isHittingBackboard) {
+            ball.vx *= -bounceFactor;
+            ball.vy *= friction;
+        }
+
+        if (isHittingRim && ball.vy > 0 && ball.y < hoop.y) {
+            ball.vy *= 0.1;
+            ball.vx *= 0.5;
+        }
+    }
+
+    function gameLoop() {
+        ctx.clearRect(0, 0, courtWidth, courtHeight);
+        drawBackground();
+        drawHoop();
+        updateBall();
+        
+        if (Date.now() - lastMoveTime > 5000) {
+            showCallout = true;
+        } else {
+            showCallout = false;
+        }
+        
+        drawBall();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function getMousePos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    }
+
+    function handleStart(e) {
+        lastMoveTime = Date.now();
+        const pos = getMousePos(e.touches ? e.touches[0] : e);
+        const dist = Math.sqrt(Math.pow(pos.x - ball.x, 2) + Math.pow(pos.y - ball.y, 2));
+        if (dist < ball.radius * 2) { 
+            ball.isDragging = true;
+            startDragX = pos.x;
+            startDragY = pos.y;
+            ball.vx = 0;
+            ball.vy = 0;
+        }
+    }
+    
+    function handleMove(e) {
+        if (!ball.isDragging) return;
+        lastMoveTime = Date.now();
+        const pos = getMousePos(e.touches ? e.touches[0] : e);
+        ball.x = pos.x;
+        ball.y = pos.y;
+    }
+
+    function handleEnd(e) {
+        if (!ball.isDragging) return;
+        ball.isDragging = false;
+        const pos = getMousePos(e.changedTouches ? e.changedTouches[0] : e);
+        ball.vx = (pos.x - startDragX) * 0.05;
+        ball.vy = (pos.y - startDragY) * 0.05;
+    }
+
+    canvas.addEventListener('mousedown', handleStart);
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('mouseup', handleEnd);
+    canvas.addEventListener('mouseleave', handleEnd);
+    canvas.addEventListener('touchstart', handleStart);
+    canvas.addEventListener('touchmove', handleMove);
+    canvas.addEventListener('touchend', handleEnd);
+    
+    gameLoop();
+</script>
