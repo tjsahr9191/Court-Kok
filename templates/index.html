@@ -24,8 +24,6 @@
     </div>
   </main>
 </div>
-
-
 {% endblock %}
 
 {% block scripts %}
@@ -54,6 +52,62 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedDuration = null;
   let selectedEventId = null;
 
+  // === Selection Paint Helpers (REPLACE) ===
+function clearSelectionPaint() {
+  if (!scheduleSlotsContainer) return;
+  // 붙여둔 오버레이 제거
+  scheduleSlotsContainer
+    .querySelectorAll('.slot-select-overlay')
+    .forEach(el => el.remove());
+  // 표식 클래스 제거(혹시 남아있다면)
+  scheduleSlotsContainer
+    .querySelectorAll('.time-slot.slot-selected')
+    .forEach(el => el.classList.remove('slot-selected'));
+}
+
+function minutesFromHHMM(hhmm) {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function paintSelectionRange(startHHMM, durationMin) {
+  if (!scheduleSlotsContainer || !startHHMM || !durationMin) return;
+  clearSelectionPaint();
+
+  const startMin = minutesFromHHMM(startHHMM);
+  const endMin = startMin + Number(durationMin);
+
+  for (let m = startMin; m < endMin; m += 30) {
+    const hh = String(Math.floor(m / 60)).padStart(2, '0');
+    const mm = String(m % 60).padStart(2, '0');
+    const slot = scheduleSlotsContainer.querySelector(`.time-slot[data-time="${hh}:${mm}"]`);
+    if (!slot || slot.dataset.type !== 'empty') continue;
+
+    // 테두리 두께 파악 (정시: border-t-2, 그 외: border-t)
+    const isOnTheHour = slot.classList.contains('border-t-2');
+    const topGapPx = isOnTheHour ? 2 : 1; // 선 안 가리게 살짝 띄움
+
+    // 이미 오버레이가 있으면 건너뜀
+    if (slot.querySelector('.slot-select-overlay')) continue;
+
+    // 오버레이 생성: 선은 그대로, 내부만 살짝 연두색
+    const overlay = document.createElement('div');
+    overlay.className = 'slot-select-overlay pointer-events-none absolute left-0 right-0 rounded-md';
+    // Tailwind만으로는 top 미세조정이 빡세니 style로 px 지정
+    overlay.style.top = `${topGapPx}px`;
+    overlay.style.bottom = '0px';
+    overlay.style.backgroundColor = 'rgba(74, 222, 128, 0.25)'; // #4ade80 @25% (연두)
+    // 슬롯을 상대 위치 컨테이너로
+    if (getComputedStyle(slot).position === 'static') {
+      slot.style.position = 'relative';
+    }
+    slot.appendChild(overlay);
+    slot.classList.add('slot-selected');
+  }
+}
+
+
   // === UI Rendering ===
   async function renderCalendar(date) {
     if (!calendarGrid || !currentMonthYearDisplay) return;
@@ -80,33 +134,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const firstDayOfMonth = new Date(year, month, 1).getDay();
     const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
 
-    // ================= ⬇️ 핵심 수정 부분 ⬇️ =================
-    // 정확한 날짜 비교를 위해 '오늘' 날짜를 시간 정보 없이 생성합니다.
+    // 오늘(시간 제거)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    // =======================================================
 
     for (let day = 1; day <= lastDateOfMonth; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-      // ================= ⬇️ 핵심 수정 부분 ⬇️ =================
       const currentDateInLoop = new Date(dateStr);
       const isToday = (currentDateInLoop.getTime() === today.getTime());
-      const isPast = currentDateInLoop < today; // 현재 렌더링 중인 날짜가 과거인지 확인
-      // =======================================================
-
+      const isPast = currentDateInLoop < today;
       const hasEvent = eventDatesSet.has(dateStr);
+
       let cellClasses = 'date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-gray-700';
 
       if (dateStr === selectedDate) {
         cellClasses += ' bg-blue-600 text-white font-bold';
       } else if (isToday) {
         cellClasses += ' bg-blue-500 text-white font-bold shadow-sm is-today';
-      // ================= ⬇️ 핵심 수정 부분 ⬇️ =================
-      // 조건 추가: 이벤트가 있고(hasEvent) 과거가 아닐 때만(!isPast) 회색으로 표시
       } else if (hasEvent && !isPast) {
         cellClasses += ' bg-gray-200 font-semibold hover:bg-gray-300';
-      // =======================================================
       } else {
         cellClasses += ' hover:bg-gray-100';
       }
@@ -172,6 +218,11 @@ document.addEventListener('DOMContentLoaded', () => {
           scheduleSlotsContainer.insertAdjacentHTML('beforeend', slot);
         }
       }
+
+      // (ADD) '모임 만들기' 뷰가 열려 있고, 이미 시작/지속시간이 선택돼 있다면 재도색
+      if (createEventView && !createEventView.classList.contains('hidden') && selectedTimeSlot && selectedDuration) {
+        paintSelectionRange(selectedTimeSlot, selectedDuration);
+      }
     } catch (error) {
       if (error.message !== 'Unauthorized') {
         window.showAlert("일정을 불러오는 데 실패했습니다. 다시 시도해 주세요.");
@@ -190,6 +241,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (viewToShow === 'create')   createEventView.classList.remove('hidden');
     if (viewToShow === 'available')viewEventAvailable.classList.remove('hidden');
     if (viewToShow === 'full')     viewEventFull.classList.remove('hidden');
+
+    // (ADD) 'create'가 아닐 땐 선택 하이라이트 제거
+    if (viewToShow !== 'create') {
+      clearSelectionPaint();
+    }
   }
 
   function formatKoreanDate(dateStr) {
@@ -202,6 +258,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!cell) return;
 
     selectedDate = cell.dataset.date;
+
+    // (ADD) 날짜 바뀌면 선택 초기화
+    selectedTimeSlot = null;
+    selectedDuration = null;
+    clearSelectionPaint();
 
     await renderCalendar(currentDate);
 
@@ -219,6 +280,9 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedEventId = eventData.id || null;
 
     if (slotType === 'empty') {
+      // (ADD) 기존 선택 하이라이트 제거
+      clearSelectionPaint();
+
       showEventDetailView('create');
       const dt = document.getElementById('create-event-date-time');
       if (dt) dt.textContent = `${formatKoreanDate(selectedDate)} ${selectedTimeSlot}`;
@@ -361,6 +425,11 @@ document.addEventListener('DOMContentLoaded', () => {
           document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
           btn.classList.add('bg-blue-500', 'text-white');
           selectedDuration = btn.dataset.duration;
+
+          // (ADD) 선택한 시작시간 + 지속시간으로 구간 하이라이트
+          if (selectedTimeSlot) {
+            paintSelectionRange(selectedTimeSlot, selectedDuration);
+          }
         });
       }
 
