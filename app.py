@@ -2,7 +2,7 @@ import os
 from flask import Flask, render_template, jsonify, request, redirect, url_for
 from prometheus_client import Gauge
 from prometheus_flask_exporter import PrometheusMetrics
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 from bson.objectid import ObjectId
 import json
 from datetime import datetime, timedelta, timezone
@@ -426,7 +426,11 @@ def login():
     user = db.users.find_one({"id": data.get('id')})
     if user and check_password_hash(user['password'], data.get('pw')):
         access_token = create_access_token(identity=str(user['_id']))
-        response = jsonify({"status": "success", "message": "로그인 성공"})
+        response = jsonify({
+            "status": "success",
+            "message": "로그인 성공",
+            "access_token": access_token  # k6를 위한 access_token
+        })
         set_access_cookies(response, access_token)
         return response, 200
     return jsonify({"message": "아이디 또는 비밀번호가 잘못되었습니다."}), 401
@@ -569,33 +573,51 @@ def create_event():
     broadcast_event_update(data.get('date'))
     return jsonify({"message": "모임이 성공적으로 생성되었습니다."}), 201
 
+# <============= 동시성 제어 X ================>
+# @app.route('/api/events/<event_id>/signup', methods=['POST'])
+# @jwt_required()
+# def signup_for_event(event_id):
+#     if db is None:
+#         return jsonify({"status": "error", "message": "Database not connected"}), 500
+#     event_id_obj = ObjectId(event_id)
+#     user_id_obj = ObjectId(get_jwt_identity())
+#     event = db.events.find_one({"_id": event_id_obj})
+#
+#     if not event:
+#         return jsonify({"message": "Event not found."}), 404
+#     if len(event.get('participants', [])) >= event['max_participants']:
+#         return jsonify({"message": "인원이 가득 찼습니다."}), 409
+#     if user_id_obj in event.get('participants', []):
+#         return jsonify({"message": "이미 참여 중인 모임입니다."}), 409
+#
+#     db.events.update_one({"_id": event_id_obj}, {"$push": {"participants": user_id_obj}})
+#     broadcast_event_update(event['date'])
+#     return jsonify({"message": "참가 신청이 완료되었습니다."}), 200
+# <============= 동시성 제어 X ================>
 
 @app.route('/api/events/<event_id>/signup', methods=['POST'])
 @jwt_required()
-def signup_for_event(event_id):
-    if db is None:
-        return jsonify({"status": "error", "message": "Database not connected"}), 500
+def signup_for_event_atomic(event_id):
     event_id_obj = ObjectId(event_id)
     user_id_obj = ObjectId(get_jwt_identity())
-    event = db.events.find_one({"_id": event_id_obj})
 
-    if not event:
-        return jsonify({"message": "Event not found."}), 404
-    if len(event.get('participants', [])) >= event['max_participants']:
-        return jsonify({"message": "인원이 가득 찼습니다."}), 409
-    if user_id_obj in event.get('participants', []):
-        return jsonify({"message": "이미 참여 중인 모임입니다."}), 409
+    updated_event = db.events.find_one_and_update(
+        {
+            "_id": event_id_obj,
+            "participants": {"$ne": user_id_obj},
+            "$expr": {"$lt": [{"$size": "$participants"}, "$max_participants"]}
+        },
+        {
+            "$push": {"participants": user_id_obj}
+        },
+        return_document=ReturnDocument.AFTER
+    )
 
-    db.events.update_one({"_id": event_id_obj}, {"$push": {"participants": user_id_obj}})
-
-    # Check if event is now full
-    updated_event = db.events.find_one({"_id": event_id_obj})
-    if len(updated_event.get('participants', [])) == updated_event['max_participants']:
-        for p_id in updated_event['participants']:
-            create_notification(p_id, updated_event, 'full')
-
-    broadcast_event_update(event['date'])
-    return jsonify({"message": "참가 신청이 완료되었습니다."}), 200
+    if updated_event:
+        broadcast_event_update(updated_event['date'])
+        return jsonify({"message": "참가 신청이 완료되었습니다."}), 200
+    else:
+        return jsonify({"message": "인원이 가득 찼거나 이미 참여 중인 모임입니다."}), 409
 
 
 @app.route('/api/events/<event_id>/signup', methods=['DELETE'])

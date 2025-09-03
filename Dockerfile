@@ -21,6 +21,7 @@ CMD ["gunicorn", "-b", "0.0.0.0:5001", "app:app"]
 
 # 나머지 애플리케이션 코드를 복사합니다.
 COPY . .
+COPY ./test /app/test
 
 # 컨테이너가 5000번 포트를 사용함을 알립니다.
 EXPOSE 5001

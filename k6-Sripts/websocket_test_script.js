@@ -1,35 +1,52 @@
 import http from 'k6/http';
 import ws from 'k6/ws';
-import { check, group, sleep } from 'k6';
+import { check, sleep } from 'k6';
 import { Counter } from 'k6/metrics';
 
+// ====================================================================================
 // --- 설정 ---
-const SERVER_URL = 'http://3.37.124.150:5001'; // EC2 서버의 Public IP
+// ====================================================================================
+const SERVER_URL = 'http://3.37.124.150:5001';
 const USER_PREFIX = `testuser_${__ENV.K6_ENV || 'local'}`;
 const USER_PASSWORD = 'password123';
-const MAX_TEST_USERS = 50; // 테스트할 동시 접속자 수
 
+// 중요: options의 target과 이 값을 일치시켜야 합니다.
+const MAX_TEST_USERS = 5000;
+// 테스트 시간 (예: 10분)
+const RAMP_UP_DURATION = '10m';
+
+// ====================================================================================
 // --- 메트릭 ---
+// ====================================================================================
 const wsSuccess = new Counter('websocket_successful_connections');
 const wsFail = new Counter('websocket_failed_connections');
 const apiErrors = new Counter('api_errors');
-const eventCreations = new Counter('event_creations');
-const eventSignups = new Counter('event_signups');
 
-// --- 시나리오 옵션 ---
+// ====================================================================================
+// --- 테스트 시나리오 옵션 ---
+// ====================================================================================
 export const options = {
+    // setup 함수의 최대 실행 시간을 15분으로 늘려줍니다.
+    setupTimeout: '15m', // <--- 이 라인을 추가하세요.
+
     scenarios: {
-        realistic_user_flow: {
-            executor: 'constant-vus',
-            vus: MAX_TEST_USERS,
-            duration: '5m', // 5분 동안 테스트
+        breakpoint_test: {
+            executor: 'ramping-vus',
+            startVUs: 0,
+            stages: [
+                { duration: RAMP_UP_DURATION, target: MAX_TEST_USERS },
+            ],
+            gracefulRampDown: '30s',
         },
     },
 };
 
-// --- 1. 테스트 사용자 사전 생성 ---
+// ====================================================================================
+// --- 1. 테스트 준비 단계 (Setup) ---
+// ====================================================================================
 export function setup() {
-    console.log(`Setting up ${MAX_TEST_USERS} test users...`);
+    console.log(`Setting up ${MAX_TEST_USERS} test users for breakpoint test...`);
+    // 모든 사용자를 미리 생성해 둡니다.
     for (let i = 1; i <= MAX_TEST_USERS; i++) {
         const signupPayload = JSON.stringify({
             name: `Test User ${i}`, id: `${USER_PREFIX}${i}`, pw: USER_PASSWORD,
@@ -40,92 +57,54 @@ export function setup() {
     console.log('User setup complete.');
 }
 
-// --- 2. 메인 테스트 로직 ---
-export default function () {
+// ====================================================================================
+// --- 2. 메인 테스트 로직 (Default Function) ---
+// ====================================================================================
+export default async function () {
     const vuId = __VU;
     const userCredentials = { id: `${USER_PREFIX}${vuId}`, pw: USER_PASSWORD };
 
-    // 2-1. 로그인하여 세션 쿠키 획득
+    // 2-1. 로그인
     const loginRes = http.post(`${SERVER_URL}/api/login`, JSON.stringify(userCredentials), {
         headers: { 'Content-Type': 'application/json' },
     });
 
-    check(loginRes, { 'Login successful': (r) => r.status === 200 });
     if (loginRes.status !== 200) {
         apiErrors.add(1);
-        return; // 로그인 실패 시 VU 종료
+        return;
     }
-    const accessTokenCookie = loginRes.cookies.access_token_cookie[0].value;
+    const accessToken = loginRes.json('access_token');
 
-    // 2-2. 쿠키를 사용하여 웹소켓 연결 (세션 동안 유지)
+    // 2-2. 웹소켓 연결 후 테스트가 끝날 때까지 유지
     const wsUrl = `${SERVER_URL.replace('http', 'ws')}/ws`;
-    const params = { headers: { 'Cookie': `access_token_cookie=${accessTokenCookie}`, 'Origin': SERVER_URL } };
+    const params = { headers: { 'Authorization': `Bearer ${accessToken}`, 'Origin': SERVER_URL } };
 
-    const res = ws.connect(wsUrl, params, function (socket) {
-        socket.on('open', () => {
-            wsSuccess.add(1);
-            console.log(`VU ${vuId}: WebSocket connected.`);
+    await new Promise((resolve, reject) => {
+        const res = ws.connect(wsUrl, params, function (socket) {
+            socket.on('open', () => {
+                wsSuccess.add(1);
+            });
 
-            // 5~10초마다 랜덤한 행동을 하도록 설정
-            socket.setInterval(() => {
-                group('User Actions', function() {
-                    // 행동 1: 특정 날짜의 일정 조회
-                    const randomDate = new Date();
-                    randomDate.setDate(randomDate.getDate() + Math.floor(Math.random() * 30));
-                    const dateStr = randomDate.toISOString().split('T')[0];
+            socket.on('close', () => {
+                resolve();
+            });
 
-                    const eventsRes = http.get(`${SERVER_URL}/api/events?date=${dateStr}`);
-                    check(eventsRes, { 'Get events successful': (r) => r.status === 200 });
+            socket.on('error', (e) => {
+                wsFail.add(1);
+                console.error(`VU ${vuId}: WebSocket Error: ${e.error()}`);
+                reject(e);
+            });
 
-                    const events = eventsRes.json('events') || [];
-
-                    const actionChance = Math.random();
-                    if (actionChance < 0.15 && events.length > 0) {
-                        // 15% 확률로 기존 이벤트에 참가 신청
-                        const availableEvents = events.filter(e => e.current < e.max);
-                        if (availableEvents.length > 0) {
-                            const eventToSignup = availableEvents[Math.floor(Math.random() * availableEvents.length)];
-                            const signupRes = http.post(`${SERVER_URL}/api/events/${eventToSignup.id}/signup`);
-                            check(signupRes, { 'Signup successful': (r) => r.status === 200 || r.status === 409 });
-                            if(signupRes.status === 200) eventSignups.add(1);
-                        }
-                    } else if (actionChance < 0.30) {
-                        // 15% 확률로 새 이벤트 생성 (총 30%)
-                        const createPayload = JSON.stringify({
-                            date: dateStr, time: "14:00", duration: 120,
-                            min_participants: 2, max_participants: 4
-                        });
-                        const createRes = http.post(`${SERVER_URL}/api/events`, createPayload, { headers: { 'Content-Type': 'application/json' } });
-                        check(createRes, { 'Create event successful': (r) => r.status === 201 });
-                        if(createRes.status === 201) eventCreations.add(1);
-                    }
-                    // 나머지 70%는 일정 조회만 함
-                });
-            }, 5000 + Math.random() * 5000); // 5-10초 간격
+            // 테스트 시간(10분)보다 약간 짧은 시간(9분 30초) 동안 연결을 유지하도록 설정
+            // 이렇게 하면 대부분의 VU가 테스트 내내 연결을 유지하게 됩니다.
+            socket.setTimeout(() => {
+                socket.close();
+            }, 570000); // 9분 30초 = 570,000ms
         });
 
-        socket.on('message', (data) => {
-            // 서버로부터 event_update 메시지를 받는지 확인
-            console.log(`VU ${vuId}: Received broadcast: ${data}`);
-        });
-
-        socket.on('close', () => {
-            console.log(`VU ${vuId}: WebSocket disconnected.`);
-        });
-
-        socket.on('error', (e) => {
+        if (!res || res.status !== 101) {
             wsFail.add(1);
-            console.error(`VU ${vuId}: WebSocket Error: ${e.error()}`);
-        });
-
-        // VU의 세션은 45~60초 동안 지속
-        socket.setTimeout(() => {
-            socket.close();
-        }, 45000 + Math.random() * 15000);
+            reject('WebSocket handshake failed');
+        }
     });
-
-    check(res, { 'WebSocket handshake successful': (r) => r && r.status === 101 });
-    if (!res || res.status !== 101) {
-        wsFail.add(1);
-    }
 }

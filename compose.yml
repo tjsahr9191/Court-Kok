@@ -5,14 +5,12 @@ services:
     ports:
       - "5001:5001"
     environment:
-      # MongoDB 접속에 필요한 환경 변수를 설정합니다.
-      # Flask 앱은 이 이름(mongodb)으로 MongoDB 컨테이너에 접근합니다.
-      - PROMETHEUS_MULTIPROC_DIR=/prometheus_metrics # 메트릭 파일을 저장할 디렉토리 지정
-      - prometheus_multiproc_dir=/prometheus_metrics # 일부 라이브러리 호환용
+      - PROMETHEUS_MULTIPROC_DIR=/prometheus_metrics
+      - prometheus_multiproc_dir=/prometheus_metrics
       - MONGO_HOST=mongodb
       - MONGO_USER=root
       - MONGO_PASS=password
-    volumes: # --- 이 볼륨 마운트 추가 ---
+    volumes:
       - prometheus_metrics_volume:/prometheus_metrics
     depends_on:
       mongodb:
@@ -20,11 +18,8 @@ services:
     networks:
       - app-network
 
-  # MongoDB 데이터베이스 서비스
   mongodb:
     image: mongo:latest
-    # MongoDB 컨테이너의 포트를 외부에 노출시킬 필요가 없습니다.
-    # Flask 앱은 내부 네트워크를 통해 접근하므로 expose만으로 충분합니다.
     ports:
       - "27017:27017"
     expose:
@@ -34,6 +29,9 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=password
+    command:
+      - mongod
+      - --auth
     healthcheck: # <--- 이 부분을 추가합니다.
       test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
       interval: 10s
