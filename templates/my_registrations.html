@@ -4,13 +4,11 @@
 
 {% block content %}
 <div class="w-full max-w-4xl mx-auto flex flex-col" style="min-height: 80vh;">
-    <!-- Header -->
     {% include 'includes/header.html' %}
 
     <main class="bg-white p-6 rounded-lg shadow-md flex-grow">
         <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">My Registrations</h1>
 
-        <!-- Section for Events Created by the User -->
         <section class="mb-8">
             <h2 class="text-2xl font-semibold text-gray-700 mb-4">Events I've Created</h2>
             <div class="space-y-4">
@@ -41,7 +39,6 @@
             </div>
         </section>
 
-        <!-- Section for Events the User is Attending -->
         <section>
             <h2 class="text-2xl font-semibold text-gray-700 mb-4">Events I'm Attending</h2>
             <div class="space-y-4">
@@ -75,69 +72,79 @@
 
 {% block scripts %}
 <script>
-// =================================================================
-// This script block is for header functionality (Logout, User Menu)
-// The page content is rendered server-side by Jinja2
-// =================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        // This script block is for header functionality (Logout, User Menu)
 
-// DOM ELEMENTS
-const userNameDisplay = document.getElementById('user-name-display');
-const logoutBtn = document.getElementById('logout-btn');
-const userMenu = document.getElementById('user-menu');
-const userMenuDropdown = document.getElementById('user-menu-dropdown');
+        // DOM Elements
+        const userNameDisplay = document.getElementById('user-name-display');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userMenu = document.getElementById('user-menu');
+        const userMenuDropdown = document.getElementById('user-menu-dropdown');
 
-// AUTH & API HELPERS
-const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
+        // AUTH & API HELPERS
+        const authedFetch = async (url, options = {}) => {
+            const fetchOptions = { ...options, headers: { ...options.headers } };
+            if (options.body) {
+                fetchOptions.headers['Content-Type'] = 'application/json';
+            }
+            const res = await fetch(url, fetchOptions);
+            if (res.status === 401 || res.status === 422) {
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            return res;
+        };
 
-const authedFetch = async (url, options = {}) => {
-    const res = await fetch(url, { ...options, headers: { ...options.headers, ...authHeaders() } });
-    if (res.status === 401 || res.status === 422) {
-        clearToken();
-        window.location.href = '/login';
-        throw new Error('Unauthorized');
-    }
-    return res;
-};
+        const handleLogout = async () => {
+            showLoader();
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+            } catch (error) {
+                console.error("Logout failed:", error);
+            } finally {
+                window.location.href = '/login';
+            }
+        };
 
-const handleLogout = async () => {
-    showLoader();
-    try {
-        await authedFetch('/api/logout', { method: 'POST' });
-    } catch (error) {
-        console.error("Logout failed:", error);
-    } finally {
-        clearToken();
-        window.location.href = '/login';
-        hideLoader();
-    }
-};
+        // INITIALIZATION
+        const init = async () => {
+            showLoader();
+            try {
+                const response = await authedFetch('/api/user_info');
+                if (!response.ok) throw new Error('Failed to fetch user info');
+                const userData = await response.json();
 
-// INITIALIZATION
-window.addEventListener('DOMContentLoaded', async () => {
-    if (!getToken()) {
-        window.location.href = '/login';
-        return;
-    }
-    showLoader();
-    try {
-        const response = await authedFetch('/api/user_info');
-        if (!response.ok) throw new Error('Failed to fetch user info');
-        const userData = await response.json();
-        userNameDisplay.textContent = userData.userName;
-    } catch (error) {
-        console.error("Initialization failed:", error);
-    } finally {
-        hideLoader();
-    }
+                if (userNameDisplay) {
+                    userNameDisplay.textContent = userData.userName;
+                }
 
-    // Attach Event Listeners for header
-    userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
-    logoutBtn.addEventListener('click', handleLogout);
-    document.addEventListener('click', (e) => { 
-        if (!userMenu.contains(e.target)) {
-            userMenuDropdown.classList.add('hidden');
-        }
+            } catch (error) {
+                if (error.message !== 'Unauthorized') {
+                    console.error("Initialization failed:", error);
+                }
+            } finally {
+                hideLoader();
+            }
+
+            // Attach Event Listeners for header
+            if (userMenu) {
+                userMenu.addEventListener('click', () => {
+                    if (userMenuDropdown) {
+                        userMenuDropdown.classList.toggle('hidden');
+                    }
+                });
+            }
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', handleLogout);
+            }
+            document.addEventListener('click', (e) => {
+                if (userMenu && !userMenu.contains(e.target) && userMenuDropdown) {
+                    userMenuDropdown.classList.add('hidden');
+                }
+            });
+        };
+
+        init();
     });
-});
 </script>
 {% endblock %}

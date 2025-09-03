@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}My Info - Court-Kok{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-2xl mx-auto flex flex-col" style="min-height: 80vh;">
+    {% include 'includes/header.html' %}
+
+    <main class="bg-white p-8 rounded-lg shadow-md flex-grow">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">My Information</h1>
+
+        <div class="space-y-4">
+            <div class="flex items-center">
+                <label class="w-24 font-semibold text-gray-600">이름:</label>
+                <p class="text-lg text-gray-800">{{ user.name }}</p>
+            </div>
+            <div class="flex items-center">
+                <label class="w-24 font-semibold text-gray-600">아이디:</label>
+                <p class="text-lg text-gray-800">{{ user.id }}</p>
+            </div>
+            <div class="flex items-center">
+                <label class="w-24 font-semibold text-gray-600">이메일:</label>
+                <p class="text-lg text-gray-800">{{ user.email }}</p>
+            </div>
+            <div class="flex items-center">
+                <label class="w-24 font-semibold text-gray-600">전화번호:</label>
+                <p class="text-lg text-gray-800">{{ user.phone }}</p>
+            </div>
+        </div>
+
+        <div class="mt-8 pt-6 border-t">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Change Password</h2>
+            <form id="change-password-form" class="space-y-4">
+                <input type="password" id="current-password" placeholder="Current Password" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" required>
+                <input type="password" id="new-password" placeholder="New Password" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" required>
+                <input type="password" id="confirm-password" placeholder="Confirm New Password" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" required>
+                <button type="submit" class="w-full bg-green-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-700 transition duration-200">Update Password</button>
+            </form>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // DOM Elements
+        const userNameDisplay = document.getElementById('user-name-display');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userMenu = document.getElementById('user-menu');
+        const userMenuDropdown = document.getElementById('user-menu-dropdown');
+        const changePasswordForm = document.getElementById('change-password-form'); // ### ADDED ###
+
+        // AUTH & API HELPERS
+        const authedFetch = async (url, options = {}) => {
+            const fetchOptions = { ...options, headers: { ...options.headers } };
+            if (options.body) {
+                fetchOptions.headers['Content-Type'] = 'application/json';
+            }
+            const res = await fetch(url, fetchOptions);
+            if (res.status === 401 || res.status === 422) {
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            return res;
+        };
+
+        const handleLogout = async () => {
+            showLoader();
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+            } catch (error) {
+                console.error("Logout failed:", error);
+            } finally {
+                window.location.href = '/login';
+            }
+        };
+
+        // ### ADDED ###: 비밀번호 변경 폼을 위한 자바스크립트 로직
+        if (changePasswordForm) {
+            changePasswordForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const current_password = document.getElementById('current-password').value;
+                const new_password = document.getElementById('new-password').value;
+                const confirm_password = document.getElementById('confirm-password').value;
+
+                if (new_password !== confirm_password) {
+                    showAlert("새 비밀번호가 일치하지 않습니다.");
+                    return;
+                }
+                if (current_password === new_password) {
+                    showAlert("새 비밀번호는 현재 비밀번호와 달라야 합니다.");
+                    return;
+                }
+
+                showLoader();
+                try {
+                    const response = await authedFetch('/api/change_password', {
+                        method: 'POST',
+                        body: JSON.stringify({ current_password, new_password, confirm_password })
+                    });
+                    const result = await response.json();
+                    showAlert(result.message);
+
+                    if (response.ok) {
+                        setTimeout(() => {
+                            handleLogout();
+                        }, 2000);
+                    }
+                } catch (error) {
+                    if (error.message !== 'Unauthorized') {
+                        showAlert("비밀번호 변경 중 오류가 발생했습니다.");
+                    }
+                } finally {
+                    hideLoader();
+                }
+            });
+        }
+
+        // INITIALIZATION
+        const init = async () => {
+            showLoader();
+            try {
+                const response = await authedFetch('/api/user_info');
+                if (!response.ok) throw new Error('Failed to fetch user info');
+                const userData = await response.json();
+
+                if (userNameDisplay) {
+                    userNameDisplay.textContent = userData.userName;
+                }
+
+            } catch (error) {
+                if (error.message !== 'Unauthorized') {
+                    console.error("Initialization failed:", error);
+                }
+            } finally {
+                hideLoader();
+            }
+
+            // Attach Event Listeners for header
+            if (userMenu) {
+                userMenu.addEventListener('click', () => {
+                    if (userMenuDropdown) {
+                        userMenuDropdown.classList.toggle('hidden');
+                    }
+                });
+            }
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', handleLogout);
+            }
+            document.addEventListener('click', (e) => { 
+                if (userMenu && !userMenu.contains(e.target) && userMenuDropdown) {
+                    userMenuDropdown.classList.add('hidden');
+                }
+            });
+        };
+
+        init();
+    });
+</script>
+{% endblock %}

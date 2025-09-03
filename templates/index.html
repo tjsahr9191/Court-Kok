@@ -4,10 +4,8 @@
 
 {% block content %}
 <div class="w-full flex flex-col" style="min-height: calc(100vh - 2rem);">
-    <!-- Header -->
     {% include 'includes/header.html' %}
 
-    <!-- Main Content: Calendar, Daily Schedule, Event Details -->
     <main class="flex w-full flex-grow">
         {% include 'includes/calendar_view.html' %}
         {% include 'includes/daily_schedule.html' %}
@@ -58,12 +56,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
     // AUTH & API HELPERS
     // =================================================================
-    const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
 
+    // The browser sends the HttpOnly cookie automatically.
     const authedFetch = async (url, options = {}) => {
-        const res = await fetch(url, { ...options, headers: { ...options.headers, ...authHeaders() } });
+        const fetchOptions = { ...options, headers: { ...options.headers } };
+        if (options.body) {
+            fetchOptions.headers['Content-Type'] = 'application/json';
+        }
+
+        const res = await fetch(url, fetchOptions);
+
+        // ### KEY FIX ###
+        // This condition now correctly handles expired tokens (422)
+        // and missing tokens (401) by redirecting to the login page.
         if (res.status === 401 || res.status === 422) {
-            clearToken();
             window.location.href = '/login';
             throw new Error('Unauthorized');
         }
@@ -73,13 +79,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleLogout = async () => {
         showLoader();
         try {
-            await authedFetch('/api/logout', { method: 'POST' });
+            await fetch('/api/logout', { method: 'POST' });
         } catch (error) {
             console.error("Logout failed:", error);
         } finally {
-            clearToken();
             window.location.href = '/login';
-            hideLoader();
         }
     };
 
@@ -95,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const firstDayOfMonth = new Date(year, month, 1).getDay();
         const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
-        
+
         for (let i = 0; i < firstDayOfMonth; i++) calendarGrid.insertAdjacentHTML('beforeend', `<div></div>`);
 
         for (let day = 1; day <= lastDateOfMonth; day++) {
@@ -112,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoader();
         scheduleDateDisplay.textContent = dateStr;
         scheduleSlotsContainer.innerHTML = '';
-        
+
         try {
             const response = await authedFetch(`/api/events?date=${dateStr}`);
             if (!response.ok) throw new Error('Failed to fetch events.');
@@ -159,14 +163,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } catch (error) {
-            console.error("Error fetching events:", error);
-            showAlert("Failed to load schedule. Please try again.");
+            if (error.message !== 'Unauthorized') {
+                console.error("Error fetching events:", error);
+                showAlert("Failed to load schedule. Please try again.");
+            }
         } finally {
             hideLoader();
         }
     }
 
     function showEventDetailView(viewToShow) {
+        if (!createEventView || !viewEventAvailable || !viewEventFull || !eventDetailsContainer) return;
         createEventView.classList.add('hidden');
         viewEventAvailable.classList.add('hidden');
         viewEventFull.classList.add('hidden');
@@ -190,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showEventDetailView('none');
         renderDailySchedule(selectedDate);
     }
-    
+
     function handleTimeSlotClick(e) {
         const slot = e.target.closest('.time-slot');
         if (!slot) return;
@@ -267,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showEventDetailView('none');
                 await renderDailySchedule(selectedDate);
             }
-        } catch (error) { showAlert("Failed to create event."); } finally { hideLoader(); }
+        } catch (error) { if (error.message !== 'Unauthorized') showAlert("Failed to create event."); } finally { hideLoader(); }
     }
 
     async function handleSignupEvent() {
@@ -281,47 +288,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 showEventDetailView('none');
                 await renderDailySchedule(selectedDate);
             }
-        } catch (error) { showAlert("Failed to sign up."); } finally { hideLoader(); }
+        } catch (error) { if (error.message !== 'Unauthorized') showAlert("Failed to sign up."); } finally { hideLoader(); }
     }
 
     // =================================================================
     // INITIALIZATION & EVENT LISTENERS
     // =================================================================
     const init = async () => {
-        if (!getToken()) {
-            window.location.href = '/login';
-            return;
-        }
         showLoader();
         try {
             const response = await authedFetch('/api/user_info');
             if (!response.ok) throw new Error('Failed to fetch user info');
             const userData = await response.json();
-            userNameDisplay.textContent = userData.userName;
-            
+
+            if(userNameDisplay) userNameDisplay.textContent = userData.userName;
+
             // Attach Event Listeners
-            userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
-            logoutBtn.addEventListener('click', handleLogout);
-            prevMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() - 1); renderCalendar(currentDate); });
-            nextMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); renderCalendar(currentDate); });
-            calendarGrid.addEventListener('click', handleDateClick);
-            scheduleSlotsContainer.addEventListener('click', handleTimeSlotClick);
-            createEventBtn.addEventListener('click', handleCreateEvent);
-            signupEventBtn.addEventListener('click', handleSignupEvent);
-            durationOptions.addEventListener('click', (e) => {
+            if(userMenu) userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
+            if(logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+            if(prevMonthBtn) prevMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() - 1); renderCalendar(currentDate); });
+            if(nextMonthBtn) nextMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); renderCalendar(currentDate); });
+            if(calendarGrid) calendarGrid.addEventListener('click', handleDateClick);
+            if(scheduleSlotsContainer) scheduleSlotsContainer.addEventListener('click', handleTimeSlotClick);
+            if(createEventBtn) createEventBtn.addEventListener('click', handleCreateEvent);
+            if(signupEventBtn) signupEventBtn.addEventListener('click', handleSignupEvent);
+            if(durationOptions) durationOptions.addEventListener('click', (e) => {
                 const btn = e.target.closest('.duration-btn');
                 if (!btn || btn.disabled) return;
                 document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
                 btn.classList.add('bg-blue-500', 'text-white');
                 selectedDuration = btn.dataset.duration;
             });
-            document.addEventListener('click', (e) => { if (userMenu && !userMenu.contains(e.target)) userMenuDropdown.classList.add('hidden'); });
+            document.addEventListener('click', (e) => {
+                if (userMenu && !userMenu.contains(e.target) && userMenuDropdown) {
+                    userMenuDropdown.classList.add('hidden');
+                }
+            });
 
             // Initial Render
             renderCalendar(currentDate);
 
         } catch (error) {
-            console.error("Initialization failed:", error);
+            if (error.message !== 'Unauthorized') {
+                console.error("Initialization failed:", error);
+            }
         } finally {
             hideLoader();
         }
@@ -331,4 +341,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {% endblock %}
-
