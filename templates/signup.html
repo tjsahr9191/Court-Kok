@@ -39,7 +39,7 @@
             </div>
             <div>
                 <label for="signup-phone" class="block text-sm font-medium text-gray-700 mb-1">전화번호</label>
-                <input type="tel" id="signup-phone" placeholder="전화번호" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <input type="tel" id="signup-phone" placeholder="010-1234-5678 형식" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
             </div>
 
             <button type="submit" class="w-full bg-green-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-700 transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
@@ -85,6 +85,14 @@
                     return;
                 }
 
+                // ### ADDED ###: 전화번호 형식 검사 로직
+                const phoneRegex = /^010-\d{4}-\d{4}$/;
+                if (!phoneRegex.test(phone)) {
+                    showAlert("전화번호 형식이 올바르지 않습니다.\n(010-1234-5678 형식으로 입력해주세요)");
+                    hideLoader();
+                    return;
+                }
+
                 try {
                     const response = await fetch('/api/signup', {
                         method: 'POST',
@@ -100,10 +108,10 @@
                         }, 1500);
                     } else {
                          showAlert(result.message || "회원가입 중 오류가 발생했습니다.");
+                         hideLoader();
                     }
                 } catch (error) {
                     showAlert("네트워크 오류가 발생했습니다.");
-                } finally {
                     hideLoader();
                 }
             });

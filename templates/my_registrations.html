@@ -1,68 +1,106 @@
 {% extends "base.html" %}
 
-{% block title %}My Registrations - Court-Kok{% endblock %}
+{% block title %}나의 예약 현황 - Court-Kok{% endblock %}
 
 {% block content %}
 <div class="w-full max-w-4xl mx-auto flex flex-col" style="min-height: 80vh;">
     {% include 'includes/header.html' %}
 
     <main class="bg-white p-6 rounded-lg shadow-md flex-grow">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">My Registrations</h1>
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">나의 예약 현황</h1>
 
         <section class="mb-8">
-            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Events I've Created</h2>
-            <div class="space-y-4">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">내가 만든 모임</h2>
+            <div id="created-events-container" class="space-y-4">
                 {% if created_events %}
                     {% for event in created_events %}
-                    <div class="border rounded-lg p-4 bg-gray-50">
+                    <div class="border rounded-lg p-4 bg-blue-50 hover:shadow-md hover:border-gray-300 transition-all duration-200">
                         <div class="flex justify-between items-start">
                             <div>
                                 <p class="font-bold text-lg text-blue-600">{{ event.date }} @ {{ event.time }}</p>
-                                <p class="text-sm text-gray-600">Duration: {{ event.duration }} minutes</p>
-                                <p class="text-sm text-gray-600">Participants: {{ event.participants | length }} / {{ event.max_participants }}</p>
+                                <p class="text-sm text-gray-600">진행 시간: {{ event.duration }}분</p>
+                                <p class="text-sm text-gray-600">참여 인원: {{ event.participants | length }} / {{ event.max_participants }}명</p>
                             </div>
-                            <span class="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Creator</span>
+                            <div class="flex flex-col items-end space-y-2">
+                                <span class="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">주최자</span>
+                                <button
+                                    class="delete-btn text-sm bg-gray-700 hover:bg-black text-white font-semibold py-2 px-4 rounded-lg transition"
+                                    data-event-id="{{ event._id }}">
+                                    모임 삭제
+                                </button>
+                            </div>
                         </div>
                         <div class="mt-4 pt-4 border-t">
-                            <h4 class="font-semibold text-gray-700">Participant List:</h4>
+                            <h4 class="font-semibold text-gray-700">참가자 목록:</h4>
                             <ul class="list-disc list-inside mt-2 text-sm text-gray-600">
                                 {% for p in event.participants_details %}
                                     <li>{{ p.name }} ({{ p.id }}) - {{ p.phone }}</li>
+                                {% else %}
+                                    <li>참가자가 아직 없습니다.</li>
                                 {% endfor %}
                             </ul>
                         </div>
                     </div>
                     {% endfor %}
                 {% else %}
-                    <p class="text-gray-500">You have not created any events.</p>
+                    <div class="text-center py-10 px-6 bg-gray-50 rounded-lg">
+                         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <h3 class="mt-2 text-lg font-medium text-gray-900">만든 모임이 없습니다.</h3>
+                        <p class="mt-1 text-sm text-gray-500">지금 바로 새로운 모임을 만들어 보세요.</p>
+                        <div class="mt-6">
+                            <a href="/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+                                새 모임 만들러 가기
+                            </a>
+                        </div>
+                    </div>
                 {% endif %}
             </div>
         </section>
 
         <section>
-            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Events I'm Attending</h2>
-            <div class="space-y-4">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">내가 참여할 모임</h2>
+            <div id="attended-events-container" class="space-y-4">
                 {% if attended_events %}
                     {% for event in attended_events %}
-                    <div class="border rounded-lg p-4 bg-gray-50">
+                    <div class="border rounded-lg p-4 bg-green-50 hover:shadow-md hover:border-gray-300 transition-all duration-200">
                        <div class="flex justify-between items-start">
                             <div>
                                 <p class="font-bold text-lg text-green-600">{{ event.date }} @ {{ event.time }}</p>
-                                <p class="text-sm text-gray-600">Duration: {{ event.duration }} minutes</p>
-                                <p class="text-sm text-gray-600">Participants: {{ event.participants | length }} / {{ event.max_participants }}</p>
+                                <p class="text-sm text-gray-600">진행 시간: {{ event.duration }}분</p>
+                                <p class="text-sm text-gray-600">참여 인원: {{ event.participants | length }} / {{ event.max_participants }}명</p>
                             </div>
-                            <span class="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">Participant</span>
+                            <div class="flex flex-col items-end space-y-2">
+                                <span class="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">참가자</span>
+                                <button
+                                    class="cancel-btn text-sm bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition"
+                                    data-event-id="{{ event._id }}">
+                                    예약 취소
+                                </button>
+                            </div>
                         </div>
                         <div class="mt-4 pt-4 border-t">
-                             <h4 class="font-semibold text-gray-700">Creator's Information:</h4>
-                             <p class="text-sm text-gray-600 mt-2">
+                             <h4 class="font-semibold text-gray-700">주최자 정보:</h4>
+                             <p class="text-sm text-gray-600 mt-1">
                                 {{ event.creator_details.name }} ({{ event.creator_details.id }}) - {{ event.creator_details.phone }}
                              </p>
                         </div>
                     </div>
                     {% endfor %}
                 {% else %}
-                    <p class="text-gray-500">You have not signed up for any events.</p>
+                     <div class="text-center py-10 px-6 bg-gray-50 rounded-lg">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <h3 class="mt-2 text-lg font-medium text-gray-900">참여 신청한 모임이 없습니다.</h3>
+                        <p class="mt-1 text-sm text-gray-500">달력에서 참여하고 싶은 모임을 찾아보세요.</p>
+                        <div class="mt-6">
+                            <a href="/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+                                모임 찾으러 가기
+                            </a>
+                        </div>
+                    </div>
                 {% endif %}
             </div>
         </section>
@@ -73,15 +111,15 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // This script block is for header functionality (Logout, User Menu)
-
-        // DOM Elements
+        // --- DOM Elements ---
         const userNameDisplay = document.getElementById('user-name-display');
         const logoutBtn = document.getElementById('logout-btn');
         const userMenu = document.getElementById('user-menu');
         const userMenuDropdown = document.getElementById('user-menu-dropdown');
+        const attendedEventsContainer = document.getElementById('attended-events-container');
+        const createdEventsContainer = document.getElementById('created-events-container');
 
-        // AUTH & API HELPERS
+        // --- AUTH & API HELPERS ---
         const authedFetch = async (url, options = {}) => {
             const fetchOptions = { ...options, headers: { ...options.headers } };
             if (options.body) {
@@ -106,37 +144,22 @@
             }
         };
 
-        // INITIALIZATION
-        const init = async () => {
+        // --- HEADER INITIALIZATION ---
+        const initHeader = async () => {
             showLoader();
             try {
                 const response = await authedFetch('/api/user_info');
                 if (!response.ok) throw new Error('Failed to fetch user info');
                 const userData = await response.json();
-
-                if (userNameDisplay) {
-                    userNameDisplay.textContent = userData.userName;
-                }
-
+                if (userNameDisplay) userNameDisplay.textContent = userData.userName;
             } catch (error) {
-                if (error.message !== 'Unauthorized') {
-                    console.error("Initialization failed:", error);
-                }
+                if (error.message !== 'Unauthorized') console.error("Initialization failed:", error);
             } finally {
                 hideLoader();
             }
 
-            // Attach Event Listeners for header
-            if (userMenu) {
-                userMenu.addEventListener('click', () => {
-                    if (userMenuDropdown) {
-                        userMenuDropdown.classList.toggle('hidden');
-                    }
-                });
-            }
-            if (logoutBtn) {
-                logoutBtn.addEventListener('click', handleLogout);
-            }
+            if (userMenu) userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
+            if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
             document.addEventListener('click', (e) => {
                 if (userMenu && !userMenu.contains(e.target) && userMenuDropdown) {
                     userMenuDropdown.classList.add('hidden');
@@ -144,7 +167,66 @@
             });
         };
 
-        init();
+        // --- PAGE-SPECIFIC LOGIC ---
+
+        // Logic for 'Events I'm Attending' (Canceling my spot)
+        if (attendedEventsContainer) {
+            attendedEventsContainer.addEventListener('click', async (e) => {
+                const cancelButton = e.target.closest('.cancel-btn');
+                if (!cancelButton) return;
+
+                const eventId = cancelButton.dataset.eventId;
+                if (confirm("정말로 예약을 취소하시겠습니까?")) {
+                    showLoader();
+                    try {
+                        const response = await authedFetch(`/api/events/${eventId}/signup`, { method: 'DELETE' });
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            showAlert(result.message);
+                            setTimeout(() => window.location.reload(), 1500);
+                        } else {
+                            showAlert(result.message || "예약 취소 중 오류가 발생했습니다.");
+                            hideLoader();
+                        }
+                    } catch (error) {
+                        if (error.message !== 'Unauthorized') showAlert("예약 취소 중 오류가 발생했습니다.");
+                        hideLoader();
+                    }
+                }
+            });
+        }
+
+        // Logic for 'Events I've Created' (Deleting the event)
+        if (createdEventsContainer) {
+            createdEventsContainer.addEventListener('click', async (e) => {
+                const deleteButton = e.target.closest('.delete-btn');
+                if (!deleteButton) return;
+
+                const eventId = deleteButton.dataset.eventId;
+                if (confirm("모임이 완전히 삭제됩니다. 정말 삭제하시겠습니까?")) {
+                    showLoader();
+                    try {
+                        const response = await authedFetch(`/api/events/${eventId}`, { method: 'DELETE' });
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            showAlert(result.message);
+                            setTimeout(() => window.location.reload(), 1500);
+                        } else {
+                            showAlert(result.message || "모임 삭제 중 오류가 발생했습니다.");
+                            hideLoader();
+                        }
+                    } catch (error) {
+                        if (error.message !== 'Unauthorized') showAlert("모임 삭제 중 오류가 발생했습니다.");
+                        hideLoader();
+                    }
+                }
+            });
+        }
+
+        // Initialize Header
+        initHeader();
     });
 </script>
 {% endblock %}
