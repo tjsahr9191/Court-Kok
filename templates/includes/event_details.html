@@ -1,57 +1,156 @@
-<!-- Event Details/Creation Column -->
-<div id="event-details-container" class="p-4 bg-white rounded-lg shadow-md flex-shrink-0 hidden ml-6" style="flex-basis: 350px;">
-    
-    <!-- View: Create New Event -->
-    <div id="create-event-view">
-        <h3 class="text-lg font-bold text-gray-800 mb-2">Create Event</h3>
-        <p id="create-event-date-time" class="text-gray-600 mb-4">Date and Time</p>
-        
-        <label class="font-semibold text-gray-700">Duration (minutes)</label>
-        <div id="duration-options" class="flex space-x-2 my-2">
-            <button data-duration="30" class="duration-btn flex-1 py-2 border rounded-full hover:bg-blue-100">30</button>
-            <button data-duration="60" class="duration-btn flex-1 py-2 border rounded-full hover:bg-blue-100">60</button>
-            <button data-duration="90" class="duration-btn flex-1 py-2 border rounded-full hover:bg-blue-100">90</button>
-            <button data-duration="120" class="duration-btn flex-1 py-2 border rounded-full hover:bg-blue-100">120</button>
-        </div>
+<!-- Event Details/Creation Column (개선판) -->
+<div id="event-details-container"
+     class="p-4 bg-white rounded-2xl shadow-lg flex-shrink-0 hidden ml-6 ring-1 ring-gray-100"
+     style="flex-basis: 360px;">
 
-        <div class="grid grid-cols-2 gap-4 mt-4">
-            <div>
-                <label for="min-participants" class="block text-sm font-medium text-gray-700">Min Participants</label>
-                <input type="number" id="min-participants" value="2" min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-            </div>
-            <div>
-                <label for="max-participants" class="block text-sm font-medium text-gray-700">Max Participants</label>
-                <input type="number" id="max-participants" value="4" min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-            </div>
-        </div>
+  <!-- View: Create New Event -->
+  <div id="create-event-view">
+    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 만들기</h3> <!-- (I18N) -->
+    <!-- 선택된 날짜/시간 표시 (UI) -->
+    <p id="create-event-date-time"
+       class="text-sm text-gray-600 mb-4 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+      일시
+    </p>
 
-        <button id="create-event-submit-btn" class="w-full mt-6 bg-blue-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-blue-700">Create</button>
+    <label class="block font-semibold text-gray-800">진행 시간(분)</label> <!-- (I18N) -->
+    <div id="duration-options" class="grid grid-cols-4 gap-2 my-2">
+      <!-- 선택 시 스타일 강조 (NEW) -->
+      <button data-duration="30"
+              class="duration-btn w-full py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-pressed="false">30</button>
+      <button data-duration="60"
+              class="duration-btn w-full py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-pressed="false">60</button>
+      <button data-duration="90"
+              class="duration-btn w-full py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-pressed="false">90</button>
+      <button data-duration="120"
+              class="duration-btn w-full py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-pressed="false">120</button>
+    </div>
+    <!-- 선택결과를 다른 스크립트가 쉽게 읽도록 숨은 필드 제공 (NEW, 선택) -->
+    <input type="hidden" id="duration-selected" value="">
+
+    <div class="grid grid-cols-2 gap-4 mt-4">
+      <div>
+        <label for="min-participants" class="block text-sm font-medium text-gray-700">최소 인원</label> <!-- (I18N) -->
+        <input type="number" id="min-participants" value="2" min="1" step="1" inputmode="numeric"
+               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label for="max-participants" class="block text-sm font-medium text-gray-700">최대 인원</label> <!-- (I18N) -->
+        <input type="number" id="max-participants" value="4" min="1" step="1" inputmode="numeric"
+               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <p id="participants-help" class="col-span-2 text-xs text-gray-500">
+        * 최대 인원은 최소 인원보다 크거나 같아야 합니다. <!-- (UX) -->
+      </p>
     </div>
 
-    <!-- View: View Available Event -->
-    <div id="view-event-available" class="hidden">
-        <h3 class="text-lg font-bold text-gray-800 mb-2">Event Details</h3>
-        <div class="space-y-2 text-gray-700">
-            <p><strong>Date:</strong> <span id="view-available-date"></span></p>
-            <p><strong>Time:</strong> <span id="view-available-time"></span></p>
-            <p><strong>Participants:</strong> <span id="view-available-participants"></span></p>
-            <p><strong>Creator:</strong> <span id="view-available-creator-id"></span></p>
-            <p><strong>Contact:</strong> <span id="view-available-creator-contact"></span></p>
-        </div>
-        <button id="signup-event-btn" class="w-full mt-6 bg-green-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-green-700">Sign Up</button>
-    </div>
+    <button id="create-event-submit-btn"
+            class="w-full mt-6 bg-blue-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+      생성하기
+    </button> <!-- (I18N) -->
+  </div>
 
-    <!-- View: View Full/Unavailable Event -->
-    <div id="view-event-full" class="hidden">
-        <h3 class="text-lg font-bold text-gray-800 mb-2">Event Details</h3>
-        <div class="space-y-2 text-gray-700">
-            <p><strong>Date:</strong> <span id="view-full-date"></span></p>
-            <p><strong>Time:</strong> <span id="view-full-time"></span></p>
-            <p><strong>Participants:</strong> <span id="view-full-participants"></span></p>
-            <p><strong>Creator:</strong> <span id="view-full-creator-id"></span></p>
-            <p><strong>Contact:</strong> <span id="view-full-creator-contact"></span></p>
-        </div>
-        <button disabled class="w-full mt-6 bg-pink-400 text-white font-semibold py-2 rounded-lg cursor-not-allowed">Full / Unavailable</button>
+  <!-- View: View Available Event -->
+  <div id="view-event-available" class="hidden">
+    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 정보</h3> <!-- (I18N) -->
+    <div class="space-y-2 text-gray-800 text-sm">
+      <p><span class="font-semibold">일자:</span> <span id="view-available-date" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">시간:</span> <span id="view-available-time" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">현재 인원:</span> <span id="view-available-participants" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">주최자:</span> <span id="view-available-creator-id" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">연락처:</span> <span id="view-available-creator-contact" class="text-gray-700"></span></p>
     </div>
+    <button id="signup-event-btn"
+            class="w-full mt-6 bg-green-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
+      신청하기
+    </button> <!-- (I18N) -->
+  </div>
 
+  <!-- View: View Full/Unavailable Event -->
+  <div id="view-event-full" class="hidden">
+    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 정보</h3> <!-- (I18N) -->
+    <div class="space-y-2 text-gray-800 text-sm">
+      <p><span class="font-semibold">일자:</span> <span id="view-full-date" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">시간:</span> <span id="view-full-time" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">현재 인원:</span> <span id="view-full-participants" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">주최자:</span> <span id="view-full-creator-id" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">연락처:</span> <span id="view-full-creator-contact" class="text-gray-700"></span></p>
+    </div>
+    <button disabled
+            class="w-full mt-6 bg-pink-400 text-white font-semibold py-2 rounded-lg cursor-not-allowed">
+      정원 초과 / 신청 불가
+    </button> <!-- (I18N) -->
+  </div>
 </div>
+
+<!-- 선택/검증 보조 스크립트 (NEW): 페이지의 scripts 블록 어딘가에 넣어도 됨 -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // 진행 시간 선택 토글 (접근성: aria-pressed)
+  const durationBtns = Array.from(document.querySelectorAll('#duration-options .duration-btn'));
+  const durationHidden = document.getElementById('duration-selected');
+
+  function selectDuration(btn) {
+    durationBtns.forEach(b => {
+      b.setAttribute('aria-pressed', 'false');
+      b.classList.remove('ring-2','ring-blue-500','bg-blue-600','text-white');
+      b.classList.add('bg-white','text-gray-700');
+    });
+    btn.setAttribute('aria-pressed', 'true');
+    btn.classList.add('ring-2','ring-blue-500','bg-blue-600','text-white');
+    btn.classList.remove('text-gray-700');
+    if (durationHidden) durationHidden.value = btn.dataset.duration || '';
+  }
+
+  durationBtns.forEach(btn => {
+    btn.addEventListener('click', () => selectDuration(btn));
+  });
+
+  // 기본값: 60분 선택
+  const defBtn = document.querySelector('#duration-options [data-duration="60"]') || durationBtns[0];
+  if (defBtn) selectDuration(defBtn);
+
+  // 최소/최대 인원 검증 UX
+  const minInput = document.getElementById('min-participants');
+  const maxInput = document.getElementById('max-participants');
+  const help = document.getElementById('participants-help');
+
+  function validateParticipants() {
+    const min = parseInt(minInput.value || '0', 10);
+    const max = parseInt(maxInput.value || '0', 10);
+    const bad = Number.isFinite(min) && Number.isFinite(max) && max < min;
+
+    [minInput, maxInput].forEach(el => {
+      el.classList.toggle('border-red-400', bad);
+      el.classList.toggle('focus:ring-red-400', bad);
+    });
+    if (help) {
+      help.classList.toggle('text-red-600', bad);
+      help.classList.toggle('text-gray-500', !bad);
+    }
+    return !bad;
+  }
+
+  [minInput, maxInput].forEach(el => el && el.addEventListener('input', validateParticipants));
+  validateParticipants();
+
+  // (선택) 제출 버튼 더블클릭 방지용 UX 보조 — 실제 생성 로직은 기존 코드 사용
+  const submitBtn = document.getElementById('create-event-submit-btn');
+  if (submitBtn) {
+    submitBtn.addEventListener('click', () => {
+      // 여기서는 비활성화만 담당. 네 기존 생성 로직에서 성공/실패 후 다시 활성화하면 깔끔.
+      if (!validateParticipants()) return;
+      submitBtn.disabled = true;
+      const orig = submitBtn.textContent;
+      submitBtn.textContent = '처리 중...';
+      setTimeout(() => { // 안전망: 5초 후 자동 복구
+        submitBtn.disabled = false;
+        submitBtn.textContent = orig;
+      }, 5000);
+    }, { passive: true });
+  }
+});
+</script>

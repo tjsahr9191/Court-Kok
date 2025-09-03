@@ -1,18 +1,79 @@
-<header class="bg-white shadow-md w-full p-4 mb-6 rounded-lg">
-    <nav class="flex items-center justify-between max-w-screen-xl mx-auto">
-        <a href="/" class="text-2xl font-bold text-blue-600">Court-Kok</a>
-        <div class="flex items-center space-x-6">
-            <a href="/my_registrations" class="text-gray-600 hover:text-blue-600 font-medium transition duration-200">My Registrations</a>
-            <div class="relative">
-                <div id="user-menu" class="flex items-center space-x-2 cursor-pointer">
-                    <span id="user-name-display" class="font-medium text-gray-700">User</span>
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </div>
-                <div id="user-menu-dropdown" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20 hidden">
-                    <a href="/user_page" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">User Page</a>
-                    <a href="#" id="logout-btn" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Logout</a>
-                </div>
-            </div>
+<header class="bg-white w-full p-4 mb-6 rounded-lg shadow-md">
+  <nav class="flex items-center justify-between max-w-screen-xl mx-auto gap-4">
+    <a href="/" class="text-2xl font-bold text-blue-600 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
+      Court-Kok
+      <span class="sr-only">홈으로 이동</span>
+    </a>
+
+    <input id="nav-open" type="checkbox" class="peer hidden md:hidden" />
+    <label for="nav-open"
+           class="md:hidden inline-flex items-center justify-center p-2 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+           aria-label="메뉴 열기/닫기">
+      <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16"/>
+      </svg>
+    </label>
+
+    <div class="hidden md:flex items-center gap-6 peer-checked:flex">
+      <a href="/notifications" id="notifications-link-desktop"
+         class="font-medium transition duration-200 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+                {{ 'text-blue-600' if request.path.startswith('/notifications') else 'text-gray-700 hover:text-blue-600' }}">
+        알림<span id="notification-count-desktop" class="hidden font-bold text-red-500 ml-1"></span>
+      </a>
+      <a href="/my_registrations"
+         class="font-medium transition duration-200 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+                {{ 'text-blue-600' if request.path.startswith('/my_registrations') else 'text-gray-700 hover:text-blue-600' }}">
+        내 등록 목록
+      </a>
+
+      <div class="relative">
+        <div id="user-menu"
+             class="flex items-center gap-2 cursor-pointer px-2 py-1 rounded-md border border-transparent hover:border-gray-200
+                    focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+             aria-haspopup="menu" aria-expanded="false">
+          <span id="user-name-display" class="font-medium text-gray-800">사용자</span>
+          <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
         </div>
-    </nav>
+
+        <div id="user-menu-dropdown"
+             class="absolute right-0 mt-2 w-52 bg-white rounded-md shadow-xl border border-gray-100 z-20 hidden"
+             role="menu" aria-labelledby="user-menu">
+          <a href="/user_page"
+             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-md"
+             role="menuitem">내 정보</a>
+          <a href="#" id="logout-btn"
+             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-b-md"
+             role="menuitem">로그아웃</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="md:hidden mt-3 hidden peer-checked:block">
+    <div class="max-w-screen-xl mx-auto flex flex-col gap-2">
+      <a href="/notifications" id="notifications-link-mobile"
+         class="block px-3 py-2 rounded-lg border border-gray-200 text-sm
+                {{ 'text-blue-600 bg-blue-50 border-blue-200' if request.path.startswith('/notifications') else 'text-gray-700 hover:bg-gray-50' }}">
+        알림<span id="notification-count-mobile" class="hidden font-bold text-red-500 ml-1"></span>
+      </a>
+      <a href="/my_registrations"
+         class="block px-3 py-2 rounded-lg border border-gray-200 text-sm
+                {{ 'text-blue-600 bg-blue-50 border-blue-200' if request.path.startswith('/my_registrations') else 'text-gray-700 hover:bg-gray-50' }}">
+        내 등록 목록
+      </a>
+      <div class="flex items-center justify-between px-3 py-2">
+        <span class="text-gray-800 font-medium" id="user-name-display-mobile">사용자</span>
+        <div class="flex gap-2">
+          <a href="/user_page"
+             class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">내 정보</a>
+          <a href="#" id="logout-btn-mobile"
+             class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">로그아웃</a>
+        </div>
+      </div>
+    </div>
+  </div>
 </header>
