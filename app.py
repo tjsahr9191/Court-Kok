@@ -96,6 +96,7 @@ def create_notification(user_id, event, category):
             # 포맷팅 성공 시
             subject = f"[Court-Kok]: {formatted_data['line2_prefix']} 알림"
             body = (
+                "안녕하세요, {user_id}님,\n"
                 f"{formatted_data['line1_prefix']} {formatted_data['line1_suffix']}\n"
                 f"{formatted_data['line2_prefix']} {formatted_data['line2_suffix']}"
             )
@@ -135,15 +136,15 @@ def format_notification_data(notif):
         if notif['category'] == 'cancellation':
             data.update(
                 {"color": "red", "line1_prefix": event_time_str, "line1_suffix": "있던", "line2_prefix": event_name_str,
-                 "line2_suffix": "이(가) 취소되었습니다."})
+                 "line2_suffix": "이(가) 취소되었습니다. 다음 기회에 함께하길 바래요!"})
         elif notif['category'] == 'full':
             data.update(
                 {"color": "emerald", "line1_prefix": event_time_str, "line1_suffix": "있는", "line2_prefix": event_name_str,
-                 "line2_suffix": f"의 최대인원 {details['max_participants']}명이 모두 모였습니다!"})
+                 "line2_suffix": f"의 최대인원 {details['max_participants']}명이 모두 모였습니다! 즐거운 시간 보내세요!"})
         elif notif['category'] == 'reminder':
             data.update(
                 {"color": "green", "line1_prefix": event_time_str, "line1_suffix": "있는", "line2_prefix": event_name_str,
-                 "line2_suffix": "이(가) 하루 남았습니다!"})
+                 "line2_suffix": "이(가) 하루 남았습니다! 즐거운 시간 보내세요!"})
         return data
     except (KeyError, ValueError, TypeError) as e:
         print(f"Error formatting notification {notif.get('_id')}: {e}")

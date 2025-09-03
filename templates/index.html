@@ -19,7 +19,7 @@
     <div class="flex flex-col flex-1 gap-6 md:gap-8">
       <div id="instruction-bubble" class="hidden max-w-xs mx-auto">
         <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200 flex flex-col items-center text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-blue-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-emerald-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
           <h3 class="font-bold text-gray-800 text-lg">모임을 만들거나 참여해 보세요!</h3>
@@ -299,14 +299,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       selectedDuration = null;
-      document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+      document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-emerald-500', 'text-white'));
 
       const DEFAULT_DURATION = 60;
       if (DEFAULT_DURATION <= availableMinutes) {
         selectedDuration = DEFAULT_DURATION;
         const defaultDurationBtn = document.querySelector(`.duration-btn[data-duration="${DEFAULT_DURATION}"]`);
         if (defaultDurationBtn) {
-          defaultDurationBtn.classList.add('bg-blue-500', 'text-white');
+          defaultDurationBtn.classList.add('bg-emerald-500', 'text-white');
         }
         paintSelectionRange(selectedTimeSlot, selectedDuration);
       }
