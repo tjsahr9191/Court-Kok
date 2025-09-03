@@ -67,11 +67,24 @@ class TestConcurrency(unittest.TestCase):
             cls.db.events.delete_many({"creator_id": creator['_id']})
             cls.db.users.delete_one({"id": "unittest_creator"})
 
-        # 2. 모임 생성자 및 모임 생성
-        print("  - Creating test event...")
+        # 2. 모임 생성자 준비 및 로그인
+        print("  - Preparing event creator...")
         creator_session = requests.Session()
         create_and_login_user(creator_session, "unittest_creator")
+        cls.creator_user = cls.db.users.find_one({"id": "unittest_creator"})
 
+        # 3. 테스트용 참가자 사용자 준비 (생성자와 분리)
+        participant_sessions = []
+        print(f"  - Preparing {NUM_USERS} concurrent users...")
+        for i in range(NUM_USERS):
+            session = requests.Session()
+            authed_session = create_and_login_user(session, f"unittest_user_{i}")
+            if authed_session:
+                participant_sessions.append(authed_session)
+        cls.authed_sessions = participant_sessions
+
+        # 4. 모임 생성 (참가자는 생성자 1명으로 시작)
+        print("  - Creating test event...")
         event_payload = {
             "date": "2025-11-11", "time": "11:00", "duration": 60,
             "min_participants": 2, "max_participants": EVENT_MAX_PARTICIPANTS
@@ -80,19 +93,10 @@ class TestConcurrency(unittest.TestCase):
         if response.status_code != 201:
             raise Exception("Failed to create test event in setUpClass")
 
-        cls.creator_user = cls.db.users.find_one({"id": "unittest_creator"})
         created_event = cls.db.events.find_one({"creator_id": cls.creator_user['_id']}, sort=[("created_at", -1)])
         cls.event_id = created_event['_id']
 
-        # 3. 동시 요청 사용자 준비
-        print(f"  - Preparing {NUM_USERS} concurrent users...")
-        for i in range(NUM_USERS):
-            session = requests.Session()
-            authed_session = create_and_login_user(session, f"unittest_user_{i}")
-            if authed_session:
-                cls.authed_sessions.append(authed_session)
-
-        print(f"Setup complete. Event ID: {cls.event_id}, Users ready: {len(cls.authed_sessions)}")
+        print(f"Setup complete. Event ID: {cls.event_id}, Creator: {cls.creator_user['id']}, Participants ready: {len(cls.authed_sessions)}")
         print("="*70)
 
 
@@ -101,7 +105,7 @@ class TestConcurrency(unittest.TestCase):
         print(f"\nRunning test: Simulating {NUM_USERS} concurrent signups...")
 
         threads = []
-        start_time = time.time() # --- 스레드 시작 직전 시간 기록 ---
+        start_time = time.time()
 
         for session in self.__class__.authed_sessions:
             thread = threading.Thread(
@@ -112,25 +116,20 @@ class TestConcurrency(unittest.TestCase):
             thread.start()
 
         for thread in threads:
-            thread.join() # --- 모든 스레드가 끝날 때까지 대기 ---
+            thread.join()
 
-        end_time = time.time() # --- 모든 스레드 종료 직후 시간 기록 ---
+        end_time = time.time()
 
-        # ▼▼▼▼▼▼▼▼▼▼▼▼▼ 이 부분을 수정 및 추가합니다 ▼▼▼▼▼▼▼▼▼▼▼▼▼
         elapsed_time = end_time - start_time
         total_requests = len(self.__class__.results)
         success_count = self.__class__.results.count(200)
-
-        # 초당 요청 처리량 (TPS) 계산
         tps = total_requests / elapsed_time if elapsed_time > 0 else 0
 
         print("\n--- Performance Results ---")
         print(f"  - Total time for {total_requests} concurrent requests: {elapsed_time:.4f} seconds.")
         print(f"  - Transactions Per Second (TPS): {tps:.2f} req/s")
         print("---------------------------")
-        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-        # --- 검증 (Verification) ---
         final_event_state = self.__class__.db.events.find_one({"_id": self.__class__.event_id})
         final_participants_count = len(final_event_state.get("participants", []))
 
@@ -140,18 +139,26 @@ class TestConcurrency(unittest.TestCase):
         print(f"  - Final participant count in DB: {final_participants_count}")
         print("----------------------------")
 
-        # 1. 최종 참가자 수가 최대 정원을 초과하지 않았는지 검증
+        # 검증 1: 최종 참가자 수가 최대 정원을 절대 넘지 않아야 함
         self.assertLessEqual(
             final_participants_count,
             EVENT_MAX_PARTICIPANTS,
             msg=f"🔴 RACE CONDITION DETECTED: Final count ({final_participants_count}) exceeded max ({EVENT_MAX_PARTICIPANTS})!"
         )
 
-        # 2. 성공한 요청 수와 최종 참가자 수가 일치하는지 검증
+        # 검증 2: (최대 정원 - 생성자 1명) 만큼만 신청에 성공해야 함
+        expected_success_count = EVENT_MAX_PARTICIPANTS - 1
         self.assertEqual(
             success_count,
+            expected_success_count,
+            msg=f"🟡 DATA INCONSISTENCY: Expected {expected_success_count} successes, but got {success_count}."
+        )
+
+        # 검증 3: 최종 참가자 수는 정확히 최대 정원과 같아야 함
+        self.assertEqual(
             final_participants_count,
-            msg=f"🟡 DATA INCONSISTENCY: Success responses ({success_count}) != Final count ({final_participants_count})."
+            EVENT_MAX_PARTICIPANTS,
+            msg=f"🟡 DATA INCONSISTENCY: Expected final count to be {EVENT_MAX_PARTICIPANTS}, but got {final_participants_count}."
         )
 
 
@@ -160,14 +167,20 @@ class TestConcurrency(unittest.TestCase):
         """ 모든 테스트 종료 후 1회 실행: 테스트 데이터 정리 """
         print("\n" + "="*70)
         print("Tearing down test environment...")
-        if cls.db:
+
+        # 'if cls.db:' 대신 'is not None'으로 명확하게 비교해야 합니다.
+        if cls.db is not None:
+            # 테스트에 사용된 모든 가상 사용자 삭제
             cls.db.users.delete_many({"id": {"$regex": "^unittest_user_"}})
+
+            # 모임 생성자 정보가 있을 경우, 해당 생성자가 만든 모임과 생성자 계정 삭제
             if cls.creator_user:
                 cls.db.events.delete_many({"creator_id": cls.creator_user['_id']})
                 cls.db.users.delete_one({"id": "unittest_creator"})
-            print("  - Test data cleaned up.")
-        print("="*70)
 
+            print("  - Test data cleaned up.")
+
+        print("="*70)
 
 if __name__ == '__main__':
     unittest.main()
