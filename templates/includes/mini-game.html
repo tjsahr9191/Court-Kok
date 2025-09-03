@@ -21,7 +21,10 @@
     let lastMoveTime = Date.now();
     let showCallout = false;
 
-    // Load a pixelated font
+    // (NEW) 점수 관련 변수 추가
+    let score = 0;
+    let canScore = true;
+
     const pixelFont = new FontFace('Pixelated', 'url(https://fonts.gstatic.com/s/pressstart2p/v14/8LzyWfge3y6sS6Wp5O9eYgoOjsK9_V0.woff2)');
     pixelFont.load().then(font => {
         document.fonts.add(font);
@@ -51,27 +54,30 @@
         ctx.fillRect(hoop.x, hoop.y, hoop.standWidth, courtHeight - hoop.y);
     }
 
+    // (NEW) 점수판을 그리는 함수
+    function drawScore() {
+        ctx.font = '16px Pixelated';
+        ctx.fillStyle = '#1c7a61'; // 테두리 색상과 일치
+        ctx.textAlign = 'left';
+        ctx.fillText('SCORE: ' + score, 15, 25);
+    }
+
     function drawBall() {
-        // Draw the main orange circle
         ctx.fillStyle = '#ff7f00';
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
         ctx.fill();
-
-        // Draw the basketball lines
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 1.5;
-        
+
         ctx.beginPath();
         ctx.moveTo(ball.x - ball.radius * Math.cos(Math.PI / 4), ball.y - ball.radius * Math.sin(Math.PI / 4));
         ctx.lineTo(ball.x + ball.radius * Math.cos(Math.PI / 4), ball.y + ball.radius * Math.sin(Math.PI / 4));
         ctx.stroke();
-
         ctx.beginPath();
         ctx.moveTo(ball.x - ball.radius * Math.cos(Math.PI / 4), ball.y + ball.radius * Math.sin(Math.PI / 4));
         ctx.lineTo(ball.x + ball.radius * Math.cos(Math.PI / 4), ball.y - ball.radius * Math.sin(Math.PI / 4));
         ctx.stroke();
-
         ctx.beginPath();
         ctx.moveTo(ball.x - ball.radius, ball.y);
         ctx.lineTo(ball.x + ball.radius, ball.y);
@@ -89,14 +95,30 @@
 
     function updateBall() {
         if (ball.isDragging) return;
+
+        const prevY = ball.y; // (NEW) 득점 감지를 위해 이전 y위치 저장
+
         ball.vy += gravity;
         ball.x += ball.vx;
         ball.y += ball.vy;
+
+        // (NEW) 득점 감지 로직
+        if (
+            canScore &&                                               // 득점 가능한 상태이고,
+            ball.vy > 0 &&                                            // 공이 아래로 떨어지고 있으며,
+            ball.x > hoop.x - hoop.rimWidth && ball.x < hoop.x &&     // 공이 골대 림의 x축 범위 안에 있고,
+            prevY < hoop.y &&                                         // 이전 위치는 림보다 위에 있었고,
+            ball.y >= hoop.y                                          // 현재 위치는 림과 같거나 아래에 있을 때
+        ) {
+            score++;          // 점수 증가
+            canScore = false; // 중복 득점 방지
+        }
 
         if (ball.y + ball.radius > courtHeight) {
             ball.vy = -Math.abs(ball.vy) * bounceFactor;
             ball.y = courtHeight - ball.radius;
             ball.vx *= friction;
+            canScore = true; // (NEW) 공이 바닥에 닿으면 다시 득점 가능 상태로 변경
         }
 
         if (ball.x + ball.radius > courtWidth) {
@@ -106,16 +128,17 @@
             ball.vx = Math.abs(ball.vx) * bounceFactor;
             ball.x = ball.radius;
         }
-        
+
         const isHittingRim = ball.x + ball.radius > hoop.x - hoop.rimWidth && ball.x - ball.radius < hoop.x &&
                              ball.y + ball.radius > hoop.y && ball.y - ball.radius < hoop.y + hoop.rimHeight;
-        
-        const isHittingBackboard = ball.x + ball.radius > hoop.x && ball.x - ball.radius < hoop.x + hoop.standWidth && 
+
+        const isHittingBackboard = ball.x + ball.radius > hoop.x && ball.x - ball.radius < hoop.x + hoop.standWidth &&
                                     ball.y + ball.radius > hoop.y - hoop.backboardHeight && ball.y - ball.radius < hoop.y;
-        
+
         if (isHittingBackboard) {
             ball.vx *= -bounceFactor;
             ball.vy *= friction;
+            canScore = true; // (NEW) 백보드에 맞아도 다시 득점 가능
         }
 
         if (isHittingRim && ball.vy > 0 && ball.y < hoop.y) {
@@ -129,14 +152,15 @@
         drawBackground();
         drawHoop();
         updateBall();
-        
+
         if (Date.now() - lastMoveTime > 5000) {
             showCallout = true;
         } else {
             showCallout = false;
         }
-        
+
         drawBall();
+        drawScore(); // (NEW) 점수판 그리기 호출
         requestAnimationFrame(gameLoop);
     }
 
@@ -154,15 +178,16 @@
         lastMoveTime = Date.now();
         const pos = getMousePos(e.touches ? e.touches[0] : e);
         const dist = Math.sqrt(Math.pow(pos.x - ball.x, 2) + Math.pow(pos.y - ball.y, 2));
-        if (dist < ball.radius * 2) { 
+        if (dist < ball.radius * 2) {
             ball.isDragging = true;
             startDragX = pos.x;
             startDragY = pos.y;
             ball.vx = 0;
             ball.vy = 0;
+            canScore = true; // (NEW) 공을 잡으면 다시 득점 가능 상태
         }
     }
-    
+
     function handleMove(e) {
         if (!ball.isDragging) return;
         lastMoveTime = Date.now();
@@ -186,6 +211,6 @@
     canvas.addEventListener('touchstart', handleStart);
     canvas.addEventListener('touchmove', handleMove);
     canvas.addEventListener('touchend', handleEnd);
-    
+
     gameLoop();
 </script>
