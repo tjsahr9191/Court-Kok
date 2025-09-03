@@ -406,13 +406,25 @@ def signup():
     data = request.json or {}
     if db.users.find_one({"id": data.get('id')}):
         return jsonify({"message": "사용자 ID가 이미 존재합니다."}), 409
+    
+    # Server-side validation for mandatory agreements
+    agree_terms = data.get('agree_terms', False)
+    agree_privacy = data.get('agree_privacy', False)
+    if not agree_terms or not agree_privacy:
+        return jsonify({"message": "필수 약관에 동의해야 합니다."}), 400
+
     hashed_password = generate_password_hash(data.get('pw'))
     user_info = {
         "name": data.get('name'),
         "id": data.get('id'),
         "password": hashed_password,
         "email": data.get('email'),
-        "phone": data.get('phone')
+        "phone": data.get('phone'),
+        "agreements": {
+            "terms_agreed_at": datetime.utcnow() if agree_terms else None,
+            "privacy_agreed_at": datetime.utcnow() if agree_privacy else None,
+            "marketing_agreed_at": datetime.utcnow() if data.get('agree_marketing') else None,
+        }
     }
     db.users.insert_one(user_info)
     return jsonify({"message": "회원가입이 완료되었습니다."}), 201
