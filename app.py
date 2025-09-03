@@ -1,5 +1,7 @@
 import os
 from flask import Flask, render_template, jsonify, request, redirect, url_for
+from prometheus_client import Gauge
+from prometheus_flask_exporter import PrometheusMetrics
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import json
@@ -12,6 +14,11 @@ from flask_jwt_extended import (
 from flask_sock import Sock
 
 app = Flask(__name__)
+metrics = PrometheusMetrics(app)
+connected_clients_gauge = Gauge(
+    'connected_clients',
+    'Number of currently connected WebSocket clients'
+)
 
 # --- JWT 설정 (쿠키 기반) ---
 app.config["JWT_SECRET_KEY"] = "super-secret-key-for-dev"  # TODO: prod에서는 환경변수 사용
@@ -215,6 +222,7 @@ def websocket_api(ws):
         ws.close()
         return
 
+    connected_clients_gauge.inc()
     clients.setdefault(current_user_id, []).append(ws)
     print(f"[WS] Connected: {current_user_id}. Total clients: {sum(len(v) for v in clients.values())}")
 
@@ -269,6 +277,7 @@ def websocket_api(ws):
     finally:
         # 연결 해제 정리
         sockets = clients.get(current_user_id, [])
+        connected_clients_gauge.dec()
         try:
             if ws in sockets:
                 sockets.remove(ws)
@@ -479,4 +488,4 @@ def delete_event(event_id):
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)

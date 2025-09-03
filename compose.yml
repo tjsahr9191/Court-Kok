@@ -7,9 +7,13 @@ services:
     environment:
       # MongoDB 접속에 필요한 환경 변수를 설정합니다.
       # Flask 앱은 이 이름(mongodb)으로 MongoDB 컨테이너에 접근합니다.
+      - PROMETHEUS_MULTIPROC_DIR=/prometheus_metrics # 메트릭 파일을 저장할 디렉토리 지정
+      - prometheus_multiproc_dir=/prometheus_metrics # 일부 라이브러리 호환용
       - MONGO_HOST=mongodb
       - MONGO_USER=root
       - MONGO_PASS=password
+    volumes: # --- 이 볼륨 마운트 추가 ---
+      - prometheus_metrics_volume:/prometheus_metrics
     depends_on:
       mongodb:
         condition: service_healthy
@@ -64,6 +68,7 @@ services:
 volumes:
   mongodb_data:
   grafana_data:
+  prometheus_metrics_volume: {}
 
 networks:
   app-network:
