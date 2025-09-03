@@ -3,13 +3,14 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import (
     create_access_token, jwt_required, JWTManager, get_jwt_identity,
     get_jwt, set_access_cookies, unset_jwt_cookies, verify_jwt_in_request
 )
 from flask_sock import Sock
+import math
 
 app = Flask(__name__)
 
@@ -54,6 +55,93 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
     return jti in BLOCKLIST
 
+
+# --- Notification Helper ---
+def create_notification(user_id, event, category):
+    """Generates a notification for a user related to an event."""
+    if db is None: return
+    # Prevent duplicate reminders
+    if category == 'reminder':
+        if db.notifications.find_one({"user_id": user_id, "event_id": event['_id'], "category": "reminder"}):
+            return
+            
+    notif = {
+        "user_id": user_id,
+        "event_id": event['_id'],
+        "category": category, # 'cancellation', 'full', 'reminder'
+        "event_details": { # Denormalize for performance
+            "date": event['date'],
+            "time": event['time'],
+            "duration": event['duration'],
+            "max_participants": event['max_participants']
+        },
+        "created_at": datetime.utcnow(),
+        "is_read": False,
+    }
+    db.notifications.insert_one(notif)
+
+
+def get_weekday_korean(date_obj):
+    return "월화수목금토일"[date_obj.weekday()]
+
+
+def format_notification_data(notif):
+    """Formats a raw notification document for the frontend."""
+    try:
+        details = notif['event_details']
+        dt_obj = datetime.strptime(f"{details['date']} {details['time']}", '%Y-%m-%d %H:%M')
+        end_dt_obj = dt_obj + timedelta(minutes=details['duration'])
+
+        # Format: {month.date(day) startinghour - endinghour}
+        event_time_str = f"{dt_obj.month}.{dt_obj.day}({get_weekday_korean(dt_obj)}) {dt_obj.strftime('%H:%M')} - {end_dt_obj.strftime('%H:%M')}"
+        # Format: {eventName}
+        event_name_str = f"{dt_obj.month}.{dt_obj.day}({get_weekday_korean(dt_obj)}) {dt_obj.strftime('%H:%M')} 모임"
+
+        data = {
+            "_id": str(notif['_id']),
+            "relative_time": humanize_time(notif['created_at'])
+        }
+        
+        if notif['category'] == 'cancellation':
+            data.update({
+                "color": "red",
+                "line1_prefix": event_time_str, "line1_suffix": "있던",
+                "line2_prefix": event_name_str, "line2_suffix": "이(가) 취소되었습니다."
+            })
+        elif notif['category'] == 'full':
+            data.update({
+                "color": "blue",
+                "line1_prefix": event_time_str, "line1_suffix": "있는",
+                "line2_prefix": event_name_str, "line2_suffix": f"의 최대인원 {details['max_participants']}명이 모두 모였습니다!"
+            })
+        elif notif['category'] == 'reminder':
+            data.update({
+                "color": "green",
+                "line1_prefix": event_time_str, "line1_suffix": "있는",
+                "line2_prefix": event_name_str, "line2_suffix": "이(가) 하루 남았습니다!"
+            })
+        return data
+    except (KeyError, ValueError, TypeError) as e:
+        # If a notification is malformed, log the error and skip it
+        print(f"Error formatting notification {notif.get('_id')}: {e}")
+        return None
+
+def humanize_time(dt):
+    """Returns a human-friendly relative time string."""
+    now = datetime.utcnow()
+    diff = now - dt
+    seconds = diff.total_seconds()
+    
+    if seconds < 60: return "방금 전"
+    minutes = math.floor(seconds / 60)
+    if minutes < 60: return f"{minutes}분 전"
+    hours = math.floor(minutes / 60)
+    if hours < 24: return f"{hours}시간 전"
+    days = math.floor(hours / 24)
+    if days < 7: return f"{days}일 전"
+    weeks = math.floor(days / 7)
+    if weeks < 5: return f"{weeks}주 전"
+    return dt.strftime('%Y년 %m월 %d일')
 
 # --- WebSocket Helper ---
 def broadcast_event_update(event_date):
@@ -199,6 +287,25 @@ def user_page():
     return render_template('user_page.html', user=user_data)
 
 
+@app.route('/notifications')
+@jwt_required()
+def notifications_page():
+    if db is None:
+        return "Database not connected", 500
+    
+    current_user_id = get_jwt_identity()
+    user_id_obj = ObjectId(current_user_id)
+
+    notifications_cursor = db.notifications.find({"user_id": user_id_obj}).sort("created_at", -1)
+    
+    # Filter out notifications that failed to format
+    notifications_list = [
+        formatted_notif for n in notifications_cursor 
+        if (formatted_notif := format_notification_data(n)) is not None
+    ]
+
+    return render_template('notifications.html', notifications=notifications_list)
+
 # ===============================================
 # ======== WebSocket Endpoint ===================
 # ===============================================
@@ -334,7 +441,15 @@ def get_user_info():
     current_user_id = get_jwt_identity()
     user = db.users.find_one({"_id": ObjectId(current_user_id)})
     if user:
-        return jsonify({"status": "success", "userName": user['name']}), 200
+        unread_count = db.notifications.count_documents({
+            "user_id": ObjectId(current_user_id),
+            "is_read": False
+        })
+        return jsonify({
+            "status": "success",
+            "userName": user['name'],
+            "notificationCount": unread_count
+        }), 200
     return jsonify({"status": "error", "message": "사용자를 찾을 수 없습니다."}), 404
 
 
@@ -359,7 +474,40 @@ def change_password():
     )
     return jsonify({"message": "비밀번호가 성공적으로 변경되었습니다. 다시 로그인해주세요."}), 200
 
-#11
+# ===============================================
+# ====== NOTIFICATION API Endpoints =============
+# ===============================================
+
+@app.route('/api/notifications/<notification_id>', methods=['DELETE'])
+@jwt_required()
+def delete_notification(notification_id):
+    if db is None: return jsonify({"message": "Database not connected"}), 500
+    
+    user_id_obj = ObjectId(get_jwt_identity())
+    notif_id_obj = ObjectId(notification_id)
+    
+    result = db.notifications.delete_one({
+        "_id": notif_id_obj,
+        "user_id": user_id_obj # Ensure user can only delete their own
+    })
+    
+    if result.deleted_count == 1:
+        return jsonify({"message": "알림이 삭제되었습니다."}), 200
+    else:
+        return jsonify({"message": "알림을 찾을 수 없거나 삭제할 권한이 없습니다."}), 404
+
+
+@app.route('/api/notifications/mark_read', methods=['POST'])
+@jwt_required()
+def mark_notifications_as_read():
+    if db is None: return jsonify({"message": "Database not connected"}), 500
+    user_id_obj = ObjectId(get_jwt_identity())
+    db.notifications.update_many(
+        {"user_id": user_id_obj, "is_read": False},
+        {"$set": {"is_read": True}}
+    )
+    return jsonify({"message": "모든 알림을 읽음으로 표시했습니다."}), 200
+
 # ===============================================
 # ======== EVENT API Endpoints ==================
 # ===============================================
@@ -405,7 +553,8 @@ def create_event():
         "max_participants": int(data.get('max_participants')),
         "creator_id": ObjectId(get_jwt_identity()),
         "participants": [ObjectId(get_jwt_identity())],
-        "created_at": datetime.utcnow()
+        "created_at": datetime.utcnow(),
+        "reminder_sent": False
     }
     db.events.insert_one(event_doc)
     broadcast_event_update(data.get('date'))
@@ -429,6 +578,13 @@ def signup_for_event(event_id):
         return jsonify({"message": "이미 참여 중인 모임입니다."}), 409
 
     db.events.update_one({"_id": event_id_obj}, {"$push": {"participants": user_id_obj}})
+    
+    # Check if event is now full
+    updated_event = db.events.find_one({"_id": event_id_obj})
+    if len(updated_event.get('participants', [])) == updated_event['max_participants']:
+        for p_id in updated_event['participants']:
+            create_notification(p_id, updated_event, 'full')
+
     broadcast_event_update(event['date'])
     return jsonify({"message": "참가 신청이 완료되었습니다."}), 200
 
@@ -468,9 +624,68 @@ def delete_event(event_id):
     if event['creator_id'] != user_id_obj:
         return jsonify({"message": "모임을 삭제할 권한이 없습니다."}), 403
 
+    # Send cancellation notifications to participants
+    participants = event.get('participants', [])
+    for p_id in participants:
+        if p_id != user_id_obj: # Don't notify the creator
+            create_notification(p_id, event, 'cancellation')
+
     db.events.delete_one({"_id": event_id_obj})
     broadcast_event_update(event['date'])
     return jsonify({"message": "모임이 성공적으로 삭제되었습니다."}), 200
+
+
+# ===============================================
+# ===== Background Task (Requires Scheduler) ====
+# ===============================================
+
+def send_event_reminders():
+    """
+    Finds events starting in the next 24 hours and sends reminders.
+    !!! IMPORTANT !!!
+    This function should be run periodically by a background task scheduler
+    (e.g., a cron job running a script, APScheduler, Celery).
+    For example, run this every hour.
+    """
+    if db is None:
+        print("[Scheduler] Database not connected. Skipping reminders.")
+        return
+
+    now = datetime.now(timezone.utc)
+    # KST is UTC+9. We need to parse DB dates as KST then compare to now.
+    # A simpler approach for local time is to use server's local time if it's set to KST.
+    # For this example, we'll use a naive datetime approach assuming server runs in KST.
+    
+    now_local = datetime.now()
+    tomorrow_local = now_local + timedelta(days=1)
+
+    query = {
+        "reminder_sent": {"$ne": True},
+    }
+    
+    events_to_remind = []
+    for event in db.events.find(query):
+        try:
+            event_dt = datetime.strptime(f"{event['date']} {event['time']}", '%Y-%m-%d %H:%M')
+            if now_local <= event_dt < tomorrow_local:
+                events_to_remind.append(event)
+        except (ValueError, KeyError):
+            continue
+
+    if not events_to_remind:
+        print(f"[{datetime.now()}] No event reminders to send.")
+        return
+
+    for event in events_to_remind:
+        print(f"Sending reminders for event: {event['_id']}")
+        for p_id in event.get('participants', []):
+            create_notification(p_id, event, 'reminder')
+        
+        db.events.update_one(
+            {"_id": event['_id']},
+            {"$set": {"reminder_sent": True}}
+        )
+    print(f"[{datetime.now()}] Sent reminders for {len(events_to_remind)} events.")
 
 
 # ===============================================

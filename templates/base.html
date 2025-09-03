@@ -18,7 +18,6 @@
 </head>
 <body class="bg-gray-100">
 
-  <!-- Loader -->
   <div id="loading-spinner" class="fixed inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-50 hidden">
     <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -26,7 +25,6 @@
     </svg>
   </div>
 
-  <!-- Alert Modal -->
   <div id="alert-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-40 hidden">
     <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm text-center">
       <h2 id="alert-message" class="text-lg font-medium text-gray-800 mb-4"></h2>
@@ -122,20 +120,37 @@
     // Header Auto-Init (optional, runs if header exists)
     // =========================
     document.addEventListener('DOMContentLoaded', () => {
-      const userNameDisplay  = document.getElementById('user-name-display');
+      const userNameDisplay   = document.getElementById('user-name-display');
+      const userNameDisplayMobile = document.getElementById('user-name-display-mobile');
       const userMenu         = document.getElementById('user-menu');
       const userMenuDropdown = document.getElementById('user-menu-dropdown');
       const logoutBtn        = document.getElementById('logout-btn');
+      const logoutBtnMobile  = document.getElementById('logout-btn-mobile');
+      const notifCountDesktop = document.getElementById('notification-count-desktop');
+      const notifCountMobile  = document.getElementById('notification-count-mobile');
+      const notifLinkDesktop  = document.getElementById('notifications-link-desktop');
+      const notifLinkMobile   = document.getElementById('notifications-link-mobile');
 
       // 헤더가 존재할 때만 초기화
       if (userNameDisplay || userMenu || userMenuDropdown || logoutBtn) {
-        // 사용자 이름 채우기
+        // 사용자 이름 및 알림 채우기
         (async () => {
           try {
             const res = await authedFetch('/api/user_info');
             if (res.ok) {
               const data = await res.json();
-              if (data?.userName && userNameDisplay) userNameDisplay.textContent = data.userName;
+              if (data?.userName) {
+                  if (userNameDisplay) userNameDisplay.textContent = data.userName;
+                  if (userNameDisplayMobile) userNameDisplayMobile.textContent = data.userName;
+              }
+              if (data?.notificationCount > 0) {
+                  const countText = `(${data.notificationCount})`;
+                  if(notifCountDesktop) { notifCountDesktop.textContent = countText; notifCountDesktop.classList.remove('hidden'); }
+                  if(notifCountMobile) { notifCountMobile.textContent = countText; notifCountMobile.classList.remove('hidden'); }
+              } else {
+                  if(notifCountDesktop) notifCountDesktop.classList.add('hidden');
+                  if(notifCountMobile) notifCountMobile.classList.add('hidden');
+              }
             }
           } catch (e) {
             // 401/422는 authedFetch가 처리
@@ -152,10 +167,22 @@
             if (!userMenu.contains(e.target)) userMenuDropdown.classList.add('hidden');
           });
         }
+        
+        // 알림 링크 클릭 시 읽음 처리
+        const handleNotifClick = async (e) => {
+            e.preventDefault();
+            try {
+                // 백그라운드에서 조용히 처리, 성공 여부와 관계없이 페이지 이동
+                authedFetch('/api/notifications/mark_read', { method: 'POST' });
+            } finally {
+                window.location.href = e.currentTarget.href;
+            }
+        };
+        if(notifLinkDesktop) notifLinkDesktop.addEventListener('click', handleNotifClick);
+        if(notifLinkMobile) notifLinkMobile.addEventListener('click', handleNotifClick);
 
         // 로그아웃
-        if (logoutBtn) {
-          logoutBtn.addEventListener('click', async (e) => {
+        const handleLogout = async (e) => {
             e.preventDefault();
             showLoader();
             try {
@@ -166,8 +193,9 @@
               hideLoader();
               window.location.href = '/login';
             }
-          });
-        }
+        };
+        if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+        if (logoutBtnMobile) logoutBtnMobile.addEventListener('click', handleLogout);
       }
     });
   </script>
