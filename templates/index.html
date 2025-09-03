@@ -7,19 +7,27 @@
   {% include 'includes/header.html' %}
 
   <main class="flex w-full flex-grow gap-6 md:gap-8">
-    <!-- Left column: mini-game + calendar stacked -->
     <div class="flex flex-col flex-1 gap-6 md:gap-8">
       {% include 'includes/mini-game.html' %}
       {% include 'includes/calendar_view.html' %}
     </div>
 
-    <!-- Middle column -->
     <div class="flex flex-col flex-1 gap-6 md:gap-8">
       {% include 'includes/daily_schedule.html' %}
     </div>
 
-    <!-- Right column -->
     <div class="flex flex-col flex-1 gap-6 md:gap-8">
+      <div id="instruction-bubble" class="hidden max-w-xs mx-auto">
+        <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200 flex flex-col items-center text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-blue-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          <h3 class="font-bold text-gray-800 text-lg">모임을 만들거나 참여해 보세요!</h3>
+          <p class="text-gray-600 mt-2 text-sm">
+            왼쪽 시간표에서 원하는 시간을 선택하여<br>새로운 모임을 만들거나 기존 모임에 참여할 수 있습니다.
+          </p>
+        </div>
+      </div>
       {% include 'includes/event_details.html' %}
     </div>
   </main>
@@ -41,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const createEventView       = document.getElementById('create-event-view');
   const viewEventAvailable    = document.getElementById('view-event-available');
   const viewEventFull         = document.getElementById('view-event-full');
+  const instructionBubble     = document.getElementById('instruction-bubble');
   const durationOptions       = document.getElementById('duration-options');
   const createEventBtn        = document.getElementById('create-event-submit-btn');
   const signupEventBtn        = document.getElementById('signup-event-btn');
@@ -52,61 +61,53 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedDuration = null;
   let selectedEventId = null;
 
-  // === Selection Paint Helpers (REPLACE) ===
-function clearSelectionPaint() {
-  if (!scheduleSlotsContainer) return;
-  // 붙여둔 오버레이 제거
-  scheduleSlotsContainer
-    .querySelectorAll('.slot-select-overlay')
-    .forEach(el => el.remove());
-  // 표식 클래스 제거(혹시 남아있다면)
-  scheduleSlotsContainer
-    .querySelectorAll('.time-slot.slot-selected')
-    .forEach(el => el.classList.remove('slot-selected'));
-}
-
-function minutesFromHHMM(hhmm) {
-  if (!hhmm) return null;
-  const [h, m] = hhmm.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function paintSelectionRange(startHHMM, durationMin) {
-  if (!scheduleSlotsContainer || !startHHMM || !durationMin) return;
-  clearSelectionPaint();
-
-  const startMin = minutesFromHHMM(startHHMM);
-  const endMin = startMin + Number(durationMin);
-
-  for (let m = startMin; m < endMin; m += 30) {
-    const hh = String(Math.floor(m / 60)).padStart(2, '0');
-    const mm = String(m % 60).padStart(2, '0');
-    const slot = scheduleSlotsContainer.querySelector(`.time-slot[data-time="${hh}:${mm}"]`);
-    if (!slot || slot.dataset.type !== 'empty') continue;
-
-    // 테두리 두께 파악 (정시: border-t-2, 그 외: border-t)
-    const isOnTheHour = slot.classList.contains('border-t-2');
-    const topGapPx = isOnTheHour ? 2 : 1; // 선 안 가리게 살짝 띄움
-
-    // 이미 오버레이가 있으면 건너뜀
-    if (slot.querySelector('.slot-select-overlay')) continue;
-
-    // 오버레이 생성: 선은 그대로, 내부만 살짝 연두색
-    const overlay = document.createElement('div');
-    overlay.className = 'slot-select-overlay pointer-events-none absolute left-0 right-0 rounded-md';
-    // Tailwind만으로는 top 미세조정이 빡세니 style로 px 지정
-    overlay.style.top = `${topGapPx}px`;
-    overlay.style.bottom = '0px';
-    overlay.style.backgroundColor = 'rgba(74, 222, 128, 0.25)'; // #4ade80 @25% (연두)
-    // 슬롯을 상대 위치 컨테이너로
-    if (getComputedStyle(slot).position === 'static') {
-      slot.style.position = 'relative';
-    }
-    slot.appendChild(overlay);
-    slot.classList.add('slot-selected');
+  // === Selection Paint Helpers ===
+  function clearSelectionPaint() {
+    if (!scheduleSlotsContainer) return;
+    scheduleSlotsContainer
+      .querySelectorAll('.slot-select-overlay')
+      .forEach(el => el.remove());
+    scheduleSlotsContainer
+      .querySelectorAll('.time-slot.slot-selected')
+      .forEach(el => el.classList.remove('slot-selected'));
   }
-}
 
+  function minutesFromHHMM(hhmm) {
+    if (!hhmm) return null;
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  function paintSelectionRange(startHHMM, durationMin) {
+    if (!scheduleSlotsContainer || !startHHMM || !durationMin) return;
+    clearSelectionPaint();
+
+    const startMin = minutesFromHHMM(startHHMM);
+    const endMin = startMin + Number(durationMin);
+
+    for (let m = startMin; m < endMin; m += 30) {
+      const hh = String(Math.floor(m / 60)).padStart(2, '0');
+      const mm = String(m % 60).padStart(2, '0');
+      const slot = scheduleSlotsContainer.querySelector(`.time-slot[data-time="${hh}:${mm}"]`);
+      if (!slot || slot.dataset.type !== 'empty') continue;
+
+      const isOnTheHour = slot.classList.contains('border-t-2');
+      const topGapPx = isOnTheHour ? 2 : 1;
+
+      if (slot.querySelector('.slot-select-overlay')) continue;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'slot-select-overlay pointer-events-none absolute left-0 right-0 rounded-md';
+      overlay.style.top = `${topGapPx}px`;
+      overlay.style.bottom = '0px';
+      overlay.style.backgroundColor = 'rgba(74, 222, 128, 0.25)';
+      if (getComputedStyle(slot).position === 'static') {
+        slot.style.position = 'relative';
+      }
+      slot.appendChild(overlay);
+      slot.classList.add('slot-selected');
+    }
+  }
 
   // === UI Rendering ===
   async function renderCalendar(date) {
@@ -134,7 +135,6 @@ function paintSelectionRange(startHHMM, durationMin) {
     const firstDayOfMonth = new Date(year, month, 1).getDay();
     const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
 
-    // 오늘(시간 제거)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -219,7 +219,6 @@ function paintSelectionRange(startHHMM, durationMin) {
         }
       }
 
-      // (ADD) '모임 만들기' 뷰가 열려 있고, 이미 시작/지속시간이 선택돼 있다면 재도색
       if (createEventView && !createEventView.classList.contains('hidden') && selectedTimeSlot && selectedDuration) {
         paintSelectionRange(selectedTimeSlot, selectedDuration);
       }
@@ -233,16 +232,18 @@ function paintSelectionRange(startHHMM, durationMin) {
   }
 
   function showEventDetailView(viewToShow) {
-    if (!createEventView || !viewEventAvailable || !viewEventFull || !eventDetailsContainer) return;
+    if (!createEventView || !viewEventAvailable || !viewEventFull || !eventDetailsContainer || !instructionBubble) return;
     createEventView.classList.add('hidden');
     viewEventAvailable.classList.add('hidden');
     viewEventFull.classList.add('hidden');
-    eventDetailsContainer.classList.toggle('hidden', viewToShow === 'none');
-    if (viewToShow === 'create')   createEventView.classList.remove('hidden');
-    if (viewToShow === 'available')viewEventAvailable.classList.remove('hidden');
-    if (viewToShow === 'full')     viewEventFull.classList.remove('hidden');
-
-    // (ADD) 'create'가 아닐 땐 선택 하이라이트 제거
+    const shouldShowDetails = viewToShow !== 'none';
+    eventDetailsContainer.classList.toggle('hidden', !shouldShowDetails);
+    instructionBubble.classList.toggle('hidden', shouldShowDetails);
+    if (shouldShowDetails) {
+      if (viewToShow === 'create')   createEventView.classList.remove('hidden');
+      if (viewToShow === 'available')viewEventAvailable.classList.remove('hidden');
+      if (viewToShow === 'full')     viewEventFull.classList.remove('hidden');
+    }
     if (viewToShow !== 'create') {
       clearSelectionPaint();
     }
@@ -256,21 +257,17 @@ function paintSelectionRange(startHHMM, durationMin) {
   async function handleDateClick(e) {
     const cell = e.target.closest('.date-cell');
     if (!cell) return;
-
     selectedDate = cell.dataset.date;
-
-    // (ADD) 날짜 바뀌면 선택 초기화
     selectedTimeSlot = null;
     selectedDuration = null;
     clearSelectionPaint();
-
     await renderCalendar(currentDate);
-
     if (dailyScheduleContainer) dailyScheduleContainer.classList.remove('hidden');
     showEventDetailView('none');
     await renderDailySchedule(selectedDate);
   }
 
+  // MODIFIED: This entire function is updated for the default duration feature
   function handleTimeSlotClick(e) {
     const slot = e.target.closest('.time-slot');
     if (!slot) return;
@@ -280,9 +277,7 @@ function paintSelectionRange(startHHMM, durationMin) {
     selectedEventId = eventData.id || null;
 
     if (slotType === 'empty') {
-      // (ADD) 기존 선택 하이라이트 제거
       clearSelectionPaint();
-
       showEventDetailView('create');
       const dt = document.getElementById('create-event-date-time');
       if (dt) dt.textContent = `${formatKoreanDate(selectedDate)} ${selectedTimeSlot}`;
@@ -294,6 +289,7 @@ function paintSelectionRange(startHHMM, durationMin) {
         if (allSlots[i].dataset.type === 'empty') consecutiveEmpty++; else break;
       }
       const availableMinutes = consecutiveEmpty * 30;
+
       document.querySelectorAll('.duration-btn').forEach(btn => {
         const duration = parseInt(btn.dataset.duration, 10);
         const disabled = duration > availableMinutes;
@@ -301,8 +297,20 @@ function paintSelectionRange(startHHMM, durationMin) {
         btn.classList.toggle('opacity-40', disabled);
         btn.classList.toggle('cursor-not-allowed', disabled);
       });
+
       selectedDuration = null;
       document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+
+      const DEFAULT_DURATION = 60;
+      if (DEFAULT_DURATION <= availableMinutes) {
+        selectedDuration = DEFAULT_DURATION;
+        const defaultDurationBtn = document.querySelector(`.duration-btn[data-duration="${DEFAULT_DURATION}"]`);
+        if (defaultDurationBtn) {
+          defaultDurationBtn.classList.add('bg-blue-500', 'text-white');
+        }
+        paintSelectionRange(selectedTimeSlot, selectedDuration);
+      }
+
     } else {
       const endTime = new Date(`${selectedDate}T${eventData.time}`);
       endTime.setMinutes(endTime.getMinutes() + eventData.duration);
@@ -381,7 +389,7 @@ function paintSelectionRange(startHHMM, durationMin) {
         window.showAlert(result.message);
         showEventDetailView('none');
         await renderDailySchedule(selectedDate);
-        await renderCalendar(currentDate); // 참가 신청 후 달력도 갱신
+        await renderCalendar(currentDate);
       } else {
         window.showAlert(result.message || "참가 신청에 실패했습니다.");
       }
@@ -426,7 +434,6 @@ function paintSelectionRange(startHHMM, durationMin) {
           btn.classList.add('bg-blue-500', 'text-white');
           selectedDuration = btn.dataset.duration;
 
-          // (ADD) 선택한 시작시간 + 지속시간으로 구간 하이라이트
           if (selectedTimeSlot) {
             paintSelectionRange(selectedTimeSlot, selectedDuration);
           }
