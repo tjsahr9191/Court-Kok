@@ -9,15 +9,7 @@
   <main class="bg-white p-6 md:p-8 rounded-2xl shadow-lg flex-grow">
     <div class="flex items-center justify-between gap-3 mb-6">
       <h1 class="text-3xl font-bold text-gray-900 border-b pb-2 flex-1">나의 예약 현황</h1>
-      <!-- 새로고침 (NEW) -->
-      <button id="refresh-btn"
-              class="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0014-7 9 9 0 00-9-9"/>
-        </svg>
-        새로고침
-      </button>
+      <
     </div>
 
     <!-- 필터 탭 (NEW) -->
@@ -66,7 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Elements ---
   const createdBox   = document.getElementById('created-events-container');
   const attendedBox  = document.getElementById('attended-events-container');
-  const refreshBtn   = document.getElementById('refresh-btn');
   const filterTabs   = Array.from(document.querySelectorAll('.filter-tab'));
 
   // --- State (NEW) ---
@@ -342,14 +333,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderLists();
     });
   });
-
-  // 새로고침 (NEW)
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-      showSkeleton();
-      sendGetMyRegistrations();
-    });
-  }
 
   // 참가자 더보기 토글 (NEW, 이벤트 위임)
   [createdBox, attendedBox].forEach(box => {
