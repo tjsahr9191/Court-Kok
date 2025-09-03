@@ -1,69 +1,177 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Court-Kok{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
-        body {
-            font-family: 'Inter', 'Noto Sans KR', sans-serif;
-            background-color: #f3f4f6;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            user-select: none;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Court-Kok{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+    body {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      background-color: #f3f4f6;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      user-select: none;
+    }
+  </style>
 </head>
 <body class="bg-gray-100">
 
-    <!-- Loading Spinner (shared across pages) -->
-    <div id="loading-spinner" class="fixed inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-50 hidden">
-        <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
+  <!-- Loader -->
+  <div id="loading-spinner" class="fixed inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-50 hidden">
+    <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  </div>
+
+  <!-- Alert Modal -->
+  <div id="alert-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-40 hidden">
+    <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm text-center">
+      <h2 id="alert-message" class="text-lg font-medium text-gray-800 mb-4"></h2>
+      <button id="alert-ok-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">확인</button>
     </div>
+  </div>
 
-    <!-- Alert Modal (shared across pages) -->
-    <div id="alert-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-40 hidden">
-        <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm text-center">
-            <h2 id="alert-message" class="text-lg font-medium text-gray-800 mb-4"></h2>
-            <button id="alert-ok-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">확인</button>
-        </div>
-    </div>
+  <div class="max-w-screen-xl mx-auto p-4">
+    {% block content %}{% endblock %}
+  </div>
 
-    <!-- Main Content Block -->
-    <div class="max-w-screen-xl mx-auto p-4">
-        {% block content %}{% endblock %}
-    </div>
+  <script>
+    // =========================
+    // UI Utilities (exported)
+    // =========================
+    const alertModal   = document.getElementById('alert-modal');
+    const alertMessage = document.getElementById('alert-message');
+    const alertOkBtn   = document.getElementById('alert-ok-btn');
 
-    <!-- Shared JavaScript Utilities -->
-    <script>
-        // UI Elements
-        const alertModal = document.getElementById('alert-modal');
-        const alertMessage = document.getElementById('alert-message');
-        const alertOkBtn = document.getElementById('alert-ok-btn');
+    const showLoader = () => document.getElementById('loading-spinner').classList.remove('hidden');
+    const hideLoader = () => document.getElementById('loading-spinner').classList.add('hidden');
+    const showModal  = (modal) => modal.classList.remove('hidden');
+    const hideModal  = (modal) => modal.classList.add('hidden');
+    const showAlert  = (message) => { alertMessage.textContent = message; showModal(alertModal); };
 
-        // Utilities
-        const showLoader = () => document.getElementById('loading-spinner').classList.remove('hidden');
-        const hideLoader = () => document.getElementById('loading-spinner').classList.add('hidden');
-        const showModal = (modal) => modal.classList.remove('hidden');
-        const hideModal = (modal) => modal.classList.add('hidden');
-        const showAlert = (message) => {
-            alertMessage.textContent = message;
-            showModal(alertModal);
-        };
-        alertOkBtn.addEventListener('click', () => hideModal(alertModal));
+    alertOkBtn.addEventListener('click', () => hideModal(alertModal));
 
-        // JWT Utilities
-        const setToken = (t) => localStorage.setItem('token', t);
-        const getToken = () => localStorage.getItem('token');
-        const clearToken = () => localStorage.removeItem('token');
-    </script>
+    // export to window
+    window.showLoader = showLoader;
+    window.hideLoader = hideLoader;
+    window.showAlert  = showAlert;
 
-    <!-- Page-specific Scripts -->
-    {% block scripts %}{% endblock %}
+    // =========================
+    // Auth & API Helper (exported)
+    // =========================
+    window.authedFetch = async (url, options = {}) => {
+      const fetchOptions = { ...options, headers: { ...options.headers } };
+      if (options.body) fetchOptions.headers['Content-Type'] = 'application/json';
+      // 쿠키 인증(크로스도메인 대비)
+      fetchOptions.credentials = 'include';
+      const res = await fetch(url, fetchOptions);
+      if (res.status === 401 || res.status === 422) {
+        window.location.href = '/login';
+        throw new Error('Unauthorized');
+      }
+      return res;
+    };
+
+    // =========================
+    // WebSocket Helper (exported)
+    // =========================
+    window.ws = window.ws || null;
+
+    window.connectWebSocket = function connectWebSocket() {
+      if (window.ws && (window.ws.readyState === WebSocket.OPEN || window.ws.readyState === WebSocket.CONNECTING)) {
+        console.log('WebSocket already connecting/connected.');
+        return;
+      }
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+      window.ws = socket;
+
+      socket.addEventListener('open', () => {
+        console.log('WebSocket connection established.');
+        window.dispatchEvent(new Event('ws:open')); // 페이지에서 후킹 가능
+      });
+
+      socket.addEventListener('close', () => {
+        console.log('WebSocket connection closed. Reconnecting in 5 seconds...');
+        setTimeout(window.connectWebSocket, 5000);
+      });
+
+      socket.addEventListener('error', (err) => {
+        console.error('WebSocket error:', err);
+        try { socket.close(); } catch (_) {}
+      });
+
+      // 기본 onmessage (페이지별로 addEventListener로 추가 핸들러 사용 권장)
+      socket.addEventListener('message', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'event_update') {
+            console.log(`Update for date ${data.date} received. Page should handle this.`);
+          }
+        } catch {
+          // ignore
+        }
+      });
+    };
+
+    // =========================
+    // Header Auto-Init (optional, runs if header exists)
+    // =========================
+    document.addEventListener('DOMContentLoaded', () => {
+      const userNameDisplay  = document.getElementById('user-name-display');
+      const userMenu         = document.getElementById('user-menu');
+      const userMenuDropdown = document.getElementById('user-menu-dropdown');
+      const logoutBtn        = document.getElementById('logout-btn');
+
+      // 헤더가 존재할 때만 초기화
+      if (userNameDisplay || userMenu || userMenuDropdown || logoutBtn) {
+        // 사용자 이름 채우기
+        (async () => {
+          try {
+            const res = await authedFetch('/api/user_info');
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.userName && userNameDisplay) userNameDisplay.textContent = data.userName;
+            }
+          } catch (e) {
+            // 401/422는 authedFetch가 처리
+            console.debug('Header user_info fetch failed', e);
+          }
+        })();
+
+        // 드롭다운 토글
+        if (userMenu && userMenuDropdown) {
+          userMenu.addEventListener('click', () => {
+            userMenuDropdown.classList.toggle('hidden');
+          });
+          document.addEventListener('click', (e) => {
+            if (!userMenu.contains(e.target)) userMenuDropdown.classList.add('hidden');
+          });
+        }
+
+        // 로그아웃
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            showLoader();
+            try {
+              await authedFetch('/api/logout', { method: 'POST' });
+            } catch (_) {
+              // ignore
+            } finally {
+              hideLoader();
+              window.location.href = '/login';
+            }
+          });
+        }
+      }
+    });
+  </script>
+
+  {% block scripts %}{% endblock %}
 </body>
 </html>

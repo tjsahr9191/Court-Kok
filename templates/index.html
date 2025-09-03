@@ -16,23 +16,19 @@
 
 {% block scripts %}
 <script>
-    // =================================================================
-    // PAGE-SPECIFIC DOM ELEMENTS
-    // =================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // === DOM Elements ===
     const userNameDisplay = document.getElementById('user-name-display');
     const logoutBtn = document.getElementById('logout-btn');
     const userMenu = document.getElementById('user-menu');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
-
     const calendarGrid = document.getElementById('calendar-grid');
     const currentMonthYearDisplay = document.getElementById('current-month-year');
     const prevMonthBtn = document.getElementById('prev-month-btn');
     const nextMonthBtn = document.getElementById('next-month-btn');
-
-    const dailyScheduleContainer = document.getElementById('daily-schedule-container');
+    const dailyScheduleContainer = document.getElementById('daily-schedule-container'); // ★ 추가
     const scheduleDateDisplay = document.getElementById('schedule-date');
     const scheduleSlotsContainer = document.getElementById('schedule-slots');
-
     const eventDetailsContainer = document.getElementById('event-details-container');
     const createEventView = document.getElementById('create-event-view');
     const viewEventAvailable = document.getElementById('view-event-available');
@@ -41,24 +37,19 @@
     const createEventBtn = document.getElementById('create-event-submit-btn');
     const signupEventBtn = document.getElementById('signup-event-btn');
 
-    // =================================================================
-    // STATE MANAGEMENT
-    // =================================================================
+    // === State Management ===
     let currentDate = new Date();
     let selectedDate = null;
     let selectedTimeSlot = null;
     let selectedDuration = null;
     let selectedEventId = null;
 
-    // =================================================================
-    // AUTH & API HELPERS
-    // =================================================================
-    const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
-
+    // === Auth & API & WebSocket (이 페이지에 필요한 모든 기능 정의) ===
     const authedFetch = async (url, options = {}) => {
-        const res = await fetch(url, { ...options, headers: { ...options.headers, ...authHeaders() } });
+        const fetchOptions = { ...options, headers: { ...options.headers } };
+        if (options.body) fetchOptions.headers['Content-Type'] = 'application/json';
+        const res = await fetch(url, fetchOptions);
         if (res.status === 401 || res.status === 422) {
-            clearToken();
             window.location.href = '/login';
             throw new Error('Unauthorized');
         }
@@ -68,109 +59,48 @@
     const handleLogout = async () => {
         showLoader();
         try {
-            await authedFetch('/api/logout', { method: 'POST' });
+            await fetch('/api/logout', { method: 'POST' });
         } catch (error) {
             console.error("Logout failed:", error);
         } finally {
-            clearToken();
             window.location.href = '/login';
-            hideLoader();
         }
     };
 
-    // =================================================================
-    // WEBSOCKET SETUP
-    // =================================================================
     let ws = null;
-    let reconnectInterval;
-
     const connectWebSocket = () => {
-        const token = getToken();
-        if (!token) {
-            console.error("No JWT token found, cannot connect to WebSocket.");
-            clearToken();
-            window.location.href = '/login';
-            return;
-        }
+        if (ws && ws.readyState === WebSocket.OPEN) return;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            return;
-        }
-
-        ws = new WebSocket(`ws://${window.location.host}/ws?token=${token}`);
-
-        ws.onopen = () => {
-            console.log("WebSocket 연결 성공.");
-            clearInterval(reconnectInterval);
-            reconnectInterval = null;
-            ws.send(JSON.stringify({ action: "get_user_info" }));
-        };
-
+        ws.onopen = () => console.log("WebSocket connection established.");
+        ws.onclose = () => setTimeout(connectWebSocket, 5000);
+        ws.onerror = (err) => { console.error("WebSocket error:", err); ws.close(); };
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            handleWsMessage(data);
-        };
-
-        ws.onclose = () => {
-            console.log("WebSocket 연결 종료.");
-            if (!reconnectInterval) {
-                reconnectInterval = setInterval(() => {
-                    console.log("WebSocket 재연결 시도 중...");
-                    connectWebSocket();
-                }, 5000);
+            if (data.type === 'event_update' && data.date === selectedDate) {
+                console.log(`Real-time update for ${selectedDate}. Reloading schedule.`);
+                renderDailySchedule(selectedDate);
             }
         };
-
-        ws.onerror = (err) => {
-            console.error("WebSocket 오류:", err);
-            ws.close();
-        };
     };
 
-    const handleWsMessage = (data) => {
-        switch (data.type) {
-            case 'user_info':
-                userNameDisplay.textContent = data.userName;
-                hideLoader();
-                break;
-            case 'events_list':
-                renderDailyScheduleContent(data.events);
-                hideLoader();
-                break;
-            case 'event_update':
-                if(selectedDate) {
-                    renderDailySchedule(selectedDate);
-                }
-                break;
-            case 'success':
-                showAlert(data.message);
-                break;
-            case 'error':
-                showAlert(data.message);
-                break;
-        }
-    };
-
-    // =================================================================
-    // UI RENDERING FUNCTIONS
-    // =================================================================
+    // === UI Rendering & Event Handlers (생략 없이 모든 함수 포함) ===
     function renderCalendar(date) {
         if (!calendarGrid || !currentMonthYearDisplay) return;
         calendarGrid.innerHTML = '';
         const year = date.getFullYear();
         const month = date.getMonth();
         currentMonthYearDisplay.textContent = `${year}년 ${month + 1}월`;
-
         const firstDayOfMonth = new Date(year, month, 1).getDay();
         const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
-
         for (let i = 0; i < firstDayOfMonth; i++) calendarGrid.insertAdjacentHTML('beforeend', `<div></div>`);
-
         for (let day = 1; day <= lastDateOfMonth; day++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const today = new Date();
             const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
-            const todayClass = isToday ? 'bg-blue-500 text-white font-bold' : 'hover:bg-gray-100';
+            let todayClass = 'hover:bg-gray-100';
+            if (isToday) todayClass = 'bg-blue-500 text-white font-bold is-today';
             const cell = `<div class="date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg ${todayClass}" data-date="${dateStr}">${day}</div>`;
             calendarGrid.insertAdjacentHTML('beforeend', cell);
         }
@@ -178,78 +108,87 @@
 
     async function renderDailySchedule(dateStr) {
         showLoader();
-        scheduleDateDisplay.textContent = dateStr;
-        scheduleSlotsContainer.innerHTML = '';
+        const [year, month, day] = dateStr.split('-');
+        scheduleDateDisplay.textContent = `${year}년 ${month}월 ${day}일`;
 
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ action: "get_events", date: dateStr }));
-        } else {
-            showAlert("WebSocket is not connected. Please refresh the page.");
+        try {
+            const response = await authedFetch(`/api/events?date=${dateStr}`);
+            if (!response.ok) throw new Error('Failed to fetch events.');
+            const data = await response.json();
+            const events = data.events || [];
+
+            const eventMap = new Map();
+            events.forEach(event => {
+                const startTime = event.time;
+                for (let i = 0; i < event.duration; i += 30) {
+                    const slotDate = new Date(`${dateStr}T${startTime}:00`);
+                    slotDate.setMinutes(slotDate.getMinutes() + i);
+                    const slotTime = `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}`;
+                    eventMap.set(slotTime, { isStart: i === 0, event: event });
+                }
+            });
+
+            scheduleSlotsContainer.innerHTML = '';
+            for (let hour = 8; hour < 22; hour++) {
+                for (let minute = 0; minute < 60; minute += 30) {
+                    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                    const slotEventInfo = eventMap.get(timeStr);
+                    const borderClass = minute === 0 ? 'border-t-2 border-gray-400' : 'border-t border-dashed border-gray-300';
+                    let slotClass = 'bg-gray-200 hover:bg-gray-300 text-gray-500';
+                    let slotText = timeStr;
+                    let slotType = 'empty';
+                    let eventData = '{}';
+
+                    if (slotEventInfo) {
+                        const isFull = slotEventInfo.event.current >= slotEventInfo.event.max;
+                        slotClass = isFull ? 'bg-pink-300 text-white' : 'bg-green-300 text-white';
+                        slotType = isFull ? 'full' : 'available';
+                        eventData = JSON.stringify(slotEventInfo.event);
+                        if (slotEventInfo.isStart) {
+                            slotText = `${timeStr} - ${slotEventInfo.event.current} / ${slotEventInfo.event.max}명`;
+                        } else {
+                            slotText = `&nbsp;`; slotClass += ' opacity-80';
+                        }
+                    }
+                    const slot = `<div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer"
+                                     data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'>${slotText}</div>`;
+                    scheduleSlotsContainer.insertAdjacentHTML('beforeend', slot);
+                }
+            }
+        } catch (error) {
+            if (error.message !== 'Unauthorized') {
+                showAlert("일정을 불러오는 데 실패했습니다. 다시 시도해 주세요.");
+            }
+        } finally {
             hideLoader();
         }
     }
 
-    function renderDailyScheduleContent(events) {
-        const eventMap = new Map();
-        events.forEach(event => {
-            const startTime = event.time;
-            for (let i = 0; i < event.duration; i += 30) {
-                const slotDate = new Date(`${selectedDate}T${startTime}:00`);
-                slotDate.setMinutes(slotDate.getMinutes() + i);
-                const slotTime = `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}`;
-                eventMap.set(slotTime, { isStart: i === 0, event: event });
-            }
-        });
-
-        for (let hour = 8; hour < 22; hour++) {
-            for (let minute = 0; minute < 60; minute += 30) {
-                const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-                const slotEventInfo = eventMap.get(timeStr);
-                const borderClass = minute === 0 ? 'border-t-2 border-gray-400' : 'border-t border-dashed border-gray-300';
-                let slotClass = 'bg-gray-200 hover:bg-gray-300 text-gray-500';
-                let slotText = timeStr;
-                let slotType = 'empty';
-                let eventData = '{}';
-
-                if (slotEventInfo) {
-                    const isFull = slotEventInfo.event.current >= slotEventInfo.event.max;
-                    slotClass = isFull ? 'bg-pink-300 text-white' : 'bg-green-300 text-white';
-                    slotType = isFull ? 'full' : 'available';
-                    eventData = JSON.stringify(slotEventInfo.event);
-                    if (slotEventInfo.isStart) {
-                        slotText = `${timeStr} - ${slotEventInfo.event.current}/${slotEventInfo.event.max}`;
-                    } else {
-                        slotText = `&nbsp;`;
-                        slotClass += ' opacity-80';
-                    }
-                }
-
-                const slot = `<div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer"
-                             data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'>${slotText}</div>`;
-                scheduleSlotsContainer.insertAdjacentHTML('beforeend', slot);
-            }
-        }
-    }
-
     function showEventDetailView(viewToShow) {
+        if (!createEventView || !viewEventAvailable || !viewEventFull || !eventDetailsContainer) return;
         createEventView.classList.add('hidden');
         viewEventAvailable.classList.add('hidden');
         viewEventFull.classList.add('hidden');
         eventDetailsContainer.classList.toggle('hidden', viewToShow === 'none');
-
         if (viewToShow === 'create') createEventView.classList.remove('hidden');
         else if (viewToShow === 'available') viewEventAvailable.classList.remove('hidden');
         else if (viewToShow === 'full') viewEventFull.classList.remove('hidden');
     }
 
-    // =================================================================
-    // EVENT HANDLERS
-    // =================================================================
+    function formatKoreanDate(dateStr) {
+        const [year, month, day] = dateStr.split('-');
+        return `${year}년 ${month}월 ${day}일`;
+    }
+
     function handleDateClick(e) {
         const cell = e.target.closest('.date-cell');
         if (!cell) return;
-        document.querySelector('.date-cell.bg-blue-200')?.classList.remove('bg-blue-200', 'text-white');
-        cell.classList.add('bg-blue-200', 'text-white');
+        document.querySelectorAll('.date-cell.bg-blue-200, .date-cell.bg-blue-600').forEach(c => {
+            c.classList.remove('bg-blue-200', 'bg-blue-600', 'text-white');
+            if (c.classList.contains('is-today')) c.classList.add('bg-blue-500', 'text-white');
+        });
+        cell.classList.add('bg-blue-600', 'text-white');
+        if (cell.classList.contains('is-today')) cell.classList.remove('bg-blue-500');
         selectedDate = cell.dataset.date;
         dailyScheduleContainer.classList.remove('hidden');
         showEventDetailView('none');
@@ -263,16 +202,14 @@
         const slotType = slot.dataset.type;
         const eventData = JSON.parse(slot.dataset.event);
         selectedEventId = eventData.id || null;
-
         if (slotType === 'empty') {
             showEventDetailView('create');
-            document.getElementById('create-event-date-time').textContent = `${selectedDate} at ${selectedTimeSlot}`;
+            document.getElementById('create-event-date-time').textContent = `${formatKoreanDate(selectedDate)} ${selectedTimeSlot}`;
             const allSlots = Array.from(scheduleSlotsContainer.querySelectorAll('.time-slot'));
             const clickedSlotIndex = allSlots.findIndex(s => s.dataset.time === selectedTimeSlot);
             let consecutiveEmptySlots = 0;
             for (let i = clickedSlotIndex; i < allSlots.length; i++) {
-                if (allSlots[i].dataset.type === 'empty') consecutiveEmptySlots++;
-                else break;
+                if (allSlots[i].dataset.type === 'empty') consecutiveEmptySlots++; else break;
             }
             const availableMinutes = consecutiveEmptySlots * 30;
             document.querySelectorAll('.duration-btn').forEach(btn => {
@@ -280,7 +217,6 @@
                 btn.disabled = duration > availableMinutes;
                 btn.classList.toggle('opacity-40', duration > availableMinutes);
                 btn.classList.toggle('cursor-not-allowed', duration > availableMinutes);
-                btn.classList.toggle('bg-gray-100', duration > availableMinutes);
             });
             selectedDuration = null;
             document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
@@ -288,21 +224,21 @@
             const endTime = new Date(`${selectedDate}T${eventData.time}`);
             endTime.setMinutes(endTime.getMinutes() + eventData.duration);
             const endTimeStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-            const timeDisplay = `${eventData.time} - ${endTimeStr} (${eventData.duration} min)`;
-            const participantsDisplay = `${eventData.current} / ${eventData.max}`;
+            const timeDisplay = `${eventData.time} - ${endTimeStr} (${eventData.duration}분)`;
+            const participantsDisplay = `${eventData.current}명 / ${eventData.max}명`;
             const creatorIdDisplay = eventData.creator.id;
             const creatorContactDisplay = eventData.creator.phone;
-
+            const dateDisplay = formatKoreanDate(selectedDate);
             if (slotType === 'available') {
                 showEventDetailView('available');
-                document.getElementById('view-available-date').textContent = selectedDate;
+                document.getElementById('view-available-date').textContent = dateDisplay;
                 document.getElementById('view-available-time').textContent = timeDisplay;
                 document.getElementById('view-available-participants').textContent = participantsDisplay;
                 document.getElementById('view-available-creator-id').textContent = creatorIdDisplay;
                 document.getElementById('view-available-creator-contact').textContent = creatorContactDisplay;
             } else if (slotType === 'full') {
                 showEventDetailView('full');
-                document.getElementById('view-full-date').textContent = selectedDate;
+                document.getElementById('view-full-date').textContent = dateDisplay;
                 document.getElementById('view-full-time').textContent = timeDisplay;
                 document.getElementById('view-full-participants').textContent = participantsDisplay;
                 document.getElementById('view-full-creator-id').textContent = creatorIdDisplay;
@@ -311,82 +247,100 @@
         }
     }
 
-    function handleCreateEvent() {
-        if (!selectedDate || !selectedTimeSlot || !selectedDuration) return showAlert("Please select a date, time, and duration.");
+    async function handleCreateEvent() {
+        if (!selectedDate || !selectedTimeSlot || !selectedDuration) return showAlert("날짜, 시간, 진행 시간을 선택해주세요.");
         const minParticipants = document.getElementById('min-participants').value;
         const maxParticipants = document.getElementById('max-participants').value;
-        if (parseInt(minParticipants) > parseInt(maxParticipants)) return showAlert("Minimum participants cannot be greater than maximum.");
-
-        const message = {
-            action: 'create_event',
-            date: selectedDate,
-            time: selectedTimeSlot,
-            duration: parseInt(selectedDuration),
-            min_participants: parseInt(minParticipants),
-            max_participants: parseInt(maxParticipants)
-        };
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(message));
-            showEventDetailView('none');
-        } else {
-            showAlert("WebSocket is not connected. Please refresh the page.");
-        }
-    }
-
-    function handleSignupEvent() {
-        if (!selectedEventId) return showAlert("No event selected.");
-        const message = {
-            action: 'signup_for_event',
-            eventId: selectedEventId
-        };
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(message));
-            showEventDetailView('none');
-        } else {
-            showAlert("WebSocket is not connected. Please refresh the page.");
-        }
-    }
-
-    // =================================================================
-    // INITIALIZATION & EVENT LISTENERS
-    // =================================================================
-    const init = () => {
-        const token = getToken();
-
-        // 토큰이 없으면 즉시 로그인 페이지로 리디렉션하고 함수 종료
-        if (!token) {
-            window.location.href = '/login';
-            return;
-        }
-
-        // 토큰이 있는 경우, 웹소켓 연결 시작 및 로더 표시
+        if (parseInt(minParticipants) > parseInt(maxParticipants)) return showAlert("최소 인원은 최대 인원보다 많을 수 없습니다.");
+        if (parseInt(minParticipants) <= 0 || parseInt(maxParticipants) <= 0) return showAlert("참여 인원은 1명 이상이어야 합니다.");
         showLoader();
-        connectWebSocket();
+        try {
+            const response = await authedFetch('/api/events', { method: 'POST', body: JSON.stringify({date: selectedDate, time: selectedTimeSlot, duration: parseInt(selectedDuration), min_participants: parseInt(minParticipants), max_participants: parseInt(maxParticipants)})});
+            const result = await response.json();
+            if (response.ok) {
+                showAlert(result.message);
+                showEventDetailView('none');
+                await renderDailySchedule(selectedDate);
+            } else {
+                showAlert(result.message || "모임 생성에 실패했습니다.");
+                hideLoader();
+            }
+        } catch (error) { if (error.message !== 'Unauthorized') showAlert("모임 생성에 실패했습니다."); hideLoader(); }
+    }
 
-        // Attach Event Listeners
-        // document.addEventListener('DOMContentLoaded', init); // 이 부분은 삭제합니다.
-        userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
-        logoutBtn.addEventListener('click', handleLogout);
-        prevMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() - 1); renderCalendar(currentDate); });
-        nextMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); renderCalendar(currentDate); });
-        calendarGrid.addEventListener('click', handleDateClick);
-        scheduleSlotsContainer.addEventListener('click', handleTimeSlotClick);
-        createEventBtn.addEventListener('click', handleCreateEvent);
-        signupEventBtn.addEventListener('click', handleSignupEvent);
-        durationOptions.addEventListener('click', (e) => {
-            const btn = e.target.closest('.duration-btn');
-            if (!btn || btn.disabled) return;
-            document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
-            btn.classList.add('bg-blue-500', 'text-white');
-            selectedDuration = btn.dataset.duration;
-        });
-        document.addEventListener('click', (e) => { if (userMenu && !userMenu.contains(e.target)) userMenuDropdown.classList.add('hidden'); });
+    async function handleSignupEvent() {
+        if (!selectedEventId) return showAlert("선택된 모임이 없습니다.");
+        showLoader();
+        try {
+            const response = await authedFetch(`/api/events/${selectedEventId}/signup`, { method: 'POST' });
+            const result = await response.json();
+            if (response.ok) {
+                showAlert(result.message);
+                showEventDetailView('none');
+                await renderDailySchedule(selectedDate);
+            } else {
+                showAlert(result.message || "참가 신청에 실패했습니다.");
+                hideLoader();
+            }
+        } catch (error) { if (error.message !== 'Unauthorized') showAlert("참가 신청에 실패했습니다."); hideLoader(); }
+    }
 
-        // Initial Render
-        renderCalendar(currentDate);
+    // === INITIALIZATION ===
+    const init = async () => {
+        showLoader();
+        try {
+            // 헤더 초기화 (사용자 이름 표시, 로그아웃 버튼 등)
+            const response = await authedFetch('/api/user_info');
+            if (!response.ok) throw new Error('Failed to fetch user info');
+            const userData = await response.json();
+            if (userNameDisplay) userNameDisplay.textContent = userData.userName;
+
+            // 웹소켓 연결
+            connectWebSocket();
+
+            // 이벤트 리스너 연결
+            if (userMenu) userMenu.addEventListener('click', () => userMenuDropdown.classList.toggle('hidden'));
+            if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+            if(prevMonthBtn) prevMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() - 1); renderCalendar(currentDate); });
+            if(nextMonthBtn) nextMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); renderCalendar(currentDate); });
+            if(calendarGrid) calendarGrid.addEventListener('click', handleDateClick);
+            if(scheduleSlotsContainer) scheduleSlotsContainer.addEventListener('click', handleTimeSlotClick);
+            if(createEventBtn) createEventBtn.addEventListener('click', handleCreateEvent);
+            if(signupEventBtn) signupEventBtn.addEventListener('click', handleSignupEvent);
+            if(durationOptions) durationOptions.addEventListener('click', (e) => {
+                const btn = e.target.closest('.duration-btn');
+                if (!btn || btn.disabled) return;
+                document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+                btn.classList.add('bg-blue-500', 'text-white');
+                selectedDuration = btn.dataset.duration;
+            });
+            document.addEventListener('click', (e) => {
+                if (userMenu && !userMenu.contains(e.target) && userMenuDropdown) {
+                    userMenuDropdown.classList.add('hidden');
+                }
+            });
+
+            // 초기 달력 렌더링 및 오늘 날짜 선택
+            renderCalendar(currentDate);
+            const todayCell = document.querySelector('.date-cell.is-today');
+            if (todayCell) {
+                todayCell.click();
+            } else {
+                const firstDayCell = document.querySelector('.date-cell');
+                if(firstDayCell) firstDayCell.click();
+            }
+        } catch (error) {
+            // authedFetch가 401/422를 처리하므로, 여기서는 다른 종류의 실패만 기록
+            if (error.message !== 'Unauthorized') {
+                console.error("Initialization failed:", error);
+                showAlert("페이지 초기화에 실패했습니다.");
+            }
+        } finally {
+            hideLoader();
+        }
     };
 
-    // DOMContentLoaded 이벤트 리스너를 한 번만 선언하고 init()을 호출
-    document.addEventListener('DOMContentLoaded', init);
+    init();
+});
 </script>
 {% endblock %}
