@@ -57,7 +57,9 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
     return jti in BLOCKLIST
 
+
 # WebSocket 설정
+connected_sockets = set()
 sock = Sock(app)
 clients = {} # {user_id: [websocket_instance, ...]}
 
@@ -209,20 +211,20 @@ def change_password():
 
 @sock.route('/ws')
 def websocket_api(ws):
-    # JWT 토큰을 쿼리 파라미터에서 가져옴
+    # Get the JWT token from the query parameters.
     token = request.args.get('token')
     if not token:
         ws.close()
         return
 
-    # 데이터베이스 연결 상태 확인
+    # Check the database connection status.
     if db is None:
         print("Database not connected, cannot handle WebSocket request.")
         ws.close()
         return
 
     try:
-        # JWT 토큰 디코딩 및 검증
+        # Decode and validate the JWT token.
         decoded_token = decode_token(token)
         current_user_id = decoded_token['sub']
         user_id_obj = ObjectId(current_user_id)
@@ -231,13 +233,17 @@ def websocket_api(ws):
         ws.close()
         return
 
-    # 이후 로직은 기존과 동일
+    # Add the new WebSocket connection to the global set and update the metric.
+    connected_sockets.add(ws)
+    connected_clients_gauge.set(len(connected_sockets))
+
+    # Add the WebSocket instance to the user-specific client dictionary.
     if current_user_id not in clients:
         clients[current_user_id] = []
     clients[current_user_id].append(ws)
 
     try:
-        # 연결 직후 사용자 정보 전송
+        # Send user info immediately after the connection is established.
         user = db.users.find_one({"_id": user_id_obj})
         if user:
             user_info = {
@@ -253,7 +259,8 @@ def websocket_api(ws):
             try:
                 message = ws.receive()
                 if message is None:
-                    continue
+                    # The client closed the connection.
+                    break
 
                 data = json.loads(message)
                 action = data.get('action')
@@ -353,7 +360,7 @@ def websocket_api(ws):
                     broadcast_event_update(event_id)
 
                 elif action == 'get_my_registrations':
-                    # '내 등록' 페이지 로드 시 호출
+                    # Called when the 'my_registrations' page loads.
                     created_events_cursor = db.events.find({"creator_id": user_id_obj}).sort("date", 1)
                     created_events_list = []
                     for event in created_events_cursor:
@@ -398,13 +405,18 @@ def websocket_api(ws):
 
             except Exception as e:
                 print(f"Error processing WebSocket message: {e}")
-                # 메시지 처리 중 오류가 발생하면 연결을 종료합니다.
+                # If an error occurs during message processing, close the connection.
                 ws.close()
                 break
 
     except Exception as e:
         print(f"WebSocket Loop Error for user {current_user_id}: {e}")
     finally:
+        # On connection close: decrement the gauge and remove the socket from sets.
+        if ws in connected_sockets:
+            connected_sockets.remove(ws)
+            connected_clients_gauge.set(len(connected_sockets))
+
         if current_user_id in clients and ws in clients[current_user_id]:
             clients[current_user_id].remove(ws)
             if not clients[current_user_id]:
