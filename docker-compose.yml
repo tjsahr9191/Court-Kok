@@ -24,7 +24,7 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=password
     healthcheck: # <--- 이 부분을 추가합니다.
-      test: [ "CMD", "mongo", "--eval", "db.adminCommand('ping')" ]
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
       interval: 10s
       timeout: 5s
       retries: 5
