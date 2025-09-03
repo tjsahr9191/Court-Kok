@@ -22,3 +22,5 @@ build/
 
 # MongoDB local data (절대 깃에 올리지 않기)
 mongodb_data/
+
+k6-Sripts/
