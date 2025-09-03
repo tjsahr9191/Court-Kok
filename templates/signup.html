@@ -3,6 +3,25 @@
 {% block title %}회원가입 - Court-Kok{% endblock %}
 
 {% block content %}
+<!-- Terms and Conditions Modal -->
+<div id="terms-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-2xl text-left flex flex-col" style="max-height: 90vh;">
+        <div class="flex items-center justify-between mb-4 border-b pb-3">
+            <h2 id="modal-title" class="text-xl font-bold text-gray-800"></h2>
+            <button id="modal-close-btn" class="p-2 -m-2 text-gray-400 hover:text-gray-700 rounded-full">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div id="modal-content" class="prose max-w-none overflow-y-auto text-gray-600">
+            <!-- Content will be injected by JS -->
+        </div>
+        <div class="mt-6 text-right border-t pt-4">
+             <button id="modal-ok-btn" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">확인</button>
+        </div>
+    </div>
+</div>
+
+
 <div class="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-8">
 
     <div class="mb-8">
@@ -41,8 +60,38 @@
                 <label for="signup-phone" class="block text-sm font-medium text-gray-700 mb-1">전화번호</label>
                 <input type="tel" id="signup-phone" placeholder="010-0000-0000" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
             </div>
+            
+            <!-- Terms and Conditions Section -->
+            <div class="border-t border-gray-200 pt-5 space-y-3">
+                <div class="flex items-start">
+                    <input id="agree-all" type="checkbox" class="h-5 w-5 mt-0.5 rounded border-gray-400 text-blue-600 focus:ring-blue-500">
+                    <label for="agree-all" class="ml-3 text-base font-semibold text-gray-800">전체 동의</label>
+                </div>
+                <hr class="border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <input id="agree-terms" name="agreement" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 agreement-checkbox" data-mandatory="true">
+                        <label for="agree-terms" class="ml-2 text-sm text-gray-700">[필수] 이용약관 동의</label>
+                    </div>
+                    <button type="button" class="text-sm text-gray-500 hover:text-blue-600 underline" data-modal-target="terms">내용보기</button>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <input id="agree-privacy" name="agreement" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 agreement-checkbox" data-mandatory="true">
+                        <label for="agree-privacy" class="ml-2 text-sm text-gray-700">[필수] 개인정보 수집 및 이용 동의</label>
+                    </div>
+                    <button type="button" class="text-sm text-gray-500 hover:text-blue-600 underline" data-modal-target="privacy">내용보기</button>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <input id="agree-marketing" name="agreement" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 agreement-checkbox">
+                        <label for="agree-marketing" class="ml-2 text-sm text-gray-700">[선택] 마케팅 정보 수신 동의</label>
+                    </div>
+                     <button type="button" class="text-sm text-gray-500 hover:text-blue-600 underline" data-modal-target="marketing">내용보기</button>
+                </div>
+            </div>
 
-            <button type="submit" class="w-full bg-green-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-700 transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+            <button type="submit" id="signup-btn" disabled class="w-full bg-green-600 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-700 transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
                 가입하기
             </button>
 
@@ -62,61 +111,145 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const signupForm = document.getElementById('signup-form');
+  const signupBtn = document.getElementById('signup-btn');
 
-  // 비밀번호 정책: 8자 이상 & 특수문자 1개 이상
-  // (영문/숫자 외 아무 문자든 특수문자로 간주)
+  // Agreement elements
+  const agreeAllCheckbox = document.getElementById('agree-all');
+  const agreementCheckboxes = document.querySelectorAll('.agreement-checkbox');
+  const mandatoryCheckboxes = document.querySelectorAll('.agreement-checkbox[data-mandatory="true"]');
+
+  // Modal elements
+  const termsModal = document.getElementById('terms-modal');
+  const modalTitle = document.getElementById('modal-title');
+  const modalContent = document.getElementById('modal-content');
+  const modalCloseBtn = document.getElementById('modal-close-btn');
+  const modalOkBtn = document.getElementById('modal-ok-btn');
+  const modalTriggers = document.querySelectorAll('button[data-modal-target]');
+
+  // --- Modal Content (prototype) ---
+  const termsContent = {
+      terms: {
+          title: '이용약관',
+          content: `<h4>제1조 (목적)</h4><p>이 약관은 Court-Kok 서비스(이하 "서비스")의 이용과 관련하여 회사와 회원 간의 권리, 의무 및 책임사항, 기타 필요한 사항을 규정함을 목적으로 합니다.</p><h4>제2조 (정의)</h4><p>이 약관에서 사용하는 용어의 정의는 다음과 같습니다. 1. "서비스"라 함은 구현되는 단말기(PC, TV, 휴대형단말기 등의 각종 유무선 장치를 포함)와 상관없이 "회원"이 이용할 수 있는 Court-Kok 및 Court-Kok 관련 제반 서비스를 의미합니다.</p><p><em>(상세 내용은 실제 서비스 정책에 따라 작성되어야 합니다.)</em></p>`
+      },
+      privacy: {
+          title: '개인정보 수집 및 이용 동의',
+          content: `<h4>1. 수집하는 개인정보 항목</h4><p>회사는 회원가입, 원활한 고객상담, 각종 서비스의 제공을 위해 아래와 같은 개인정보를 수집하고 있습니다.</p><ul><li>필수항목: 이름, 아이디, 비밀번호, 이메일, 전화번호</li><li>선택항목: (없음)</li></ul><h4>2. 개인정보의 수집 및 이용목적</h4><p>회사는 수집한 개인정보를 다음의 목적을 위해 활용합니다. 1. 서비스 제공에 관한 계약 이행 및 서비스 제공에 따른 요금정산 콘텐츠 제공, 특정 맞춤 서비스 제공 2. 회원 관리: 회원제 서비스 이용에 따른 본인확인, 개인 식별, 불량회원의 부정 이용 방지와 비인가 사용 방지, 가입 의사 확인, 연령확인</p><p><em>(상세 내용은 실제 서비스 정책에 따라 작성되어야 합니다.)</em></p>`
+      },
+      marketing: {
+          title: '마케팅 정보 수신 동의',
+          content: `<h4>1. 수신 동의</h4><p>회사는 회원의 사전 동의를 받아 이메일, SMS 등을 통해 서비스 관련 정보, 이벤트 및 광고성 정보를 전송할 수 있습니다. 서비스의 주요 정책 변경 등 의무적으로 안내되어야 하는 정보성 내용은 수신 동의 여부와 무관하게 발송됩니다.</p><h4>2. 철회</h4><p>수신을 원치 않을 경우, 언제든지 '내 정보' 페이지에서 수신 동의를 철회할 수 있습니다.</p><p><em>(상세 내용은 실제 서비스 정책에 따라 작성되어야 합니다.)</em></p>`
+      }
+  };
+
+  // --- Modal Logic ---
+  const openModal = (type) => {
+      const data = termsContent[type];
+      if (!data) return;
+      modalTitle.textContent = data.title;
+      modalContent.innerHTML = data.content;
+      termsModal.classList.remove('hidden');
+  };
+
+  const closeModal = () => {
+      termsModal.classList.add('hidden');
+  };
+
+  modalTriggers.forEach(trigger => {
+      trigger.addEventListener('click', () => {
+          openModal(trigger.dataset.modalTarget);
+      });
+  });
+  modalCloseBtn.addEventListener('click', closeModal);
+  modalOkBtn.addEventListener('click', closeModal);
+  termsModal.addEventListener('click', (e) => {
+      if (e.target === termsModal) closeModal();
+  });
+
+
+  // --- Agreement Logic ---
+  const checkAgreements = () => {
+      const allMandatoryChecked = Array.from(mandatoryCheckboxes).every(cb => cb.checked);
+      signupBtn.disabled = !allMandatoryChecked;
+
+      const allChecked = Array.from(agreementCheckboxes).every(cb => cb.checked);
+      const someChecked = Array.from(agreementCheckboxes).some(cb => cb.checked);
+      
+      if (allChecked) {
+        agreeAllCheckbox.checked = true;
+        agreeAllCheckbox.indeterminate = false;
+      } else if (someChecked) {
+        agreeAllCheckbox.checked = false;
+        agreeAllCheckbox.indeterminate = true;
+      } else {
+        agreeAllCheckbox.checked = false;
+        agreeAllCheckbox.indeterminate = false;
+      }
+  };
+
+  agreementCheckboxes.forEach(cb => {
+      cb.addEventListener('change', checkAgreements);
+  });
+
+  agreeAllCheckbox.addEventListener('change', () => {
+      agreementCheckboxes.forEach(cb => {
+          cb.checked = agreeAllCheckbox.checked;
+      });
+      checkAgreements();
+  });
+
+
+  // --- Form Submission ---
   const passwordPolicy = /^(?=.*[^A-Za-z0-9]).{8,}$/;
-
   if (signupForm) {
     signupForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      showLoader();
-
+      
       const name = document.getElementById('signup-name').value;
       const id = document.getElementById('signup-id').value;
       const pw = document.getElementById('signup-pw').value;
       const confirmPw = document.getElementById('signup-confirm-pw').value;
       const email = document.getElementById('signup-email').value;
       const phone = document.getElementById('signup-phone').value;
-
-      // 기본 필수값 체크
-      if (!name || !id || !pw || !confirmPw || !email || !phone) {
-        showAlert("모든 필드를 채워주세요.");
-        hideLoader();
-        return;
+      
+      if (signupBtn.disabled) {
+          showAlert("필수 약관에 모두 동의해야 합니다.");
+          return;
       }
 
-      // 비밀번호 정책 체크
+      if (!name || !id || !pw || !confirmPw || !email || !phone) {
+        showAlert("모든 필드를 채워주세요.");
+        return;
+      }
       if (pw.length < 8) {
         showAlert("비밀번호는 8자 이상이어야 합니다.");
-        hideLoader();
         return;
       }
       if (!passwordPolicy.test(pw)) {
         showAlert("비밀번호에 특수문자를 1개 이상 포함해 주세요.");
-        hideLoader();
         return;
       }
-
       if (pw !== confirmPw) {
         showAlert("비밀번호가 일치하지 않습니다.");
-        hideLoader();
         return;
       }
-
-      // 전화번호 형식 체크
       const phoneRegex = /^010-\d{4}-\d{4}$/;
       if (!phoneRegex.test(phone)) {
         showAlert("전화번호 형식이 올바르지 않습니다.\n(010-1234-5678 형식으로 입력해주세요)");
-        hideLoader();
         return;
       }
+
+      showLoader();
+      
+      const agree_terms = document.getElementById('agree-terms').checked;
+      const agree_privacy = document.getElementById('agree-privacy').checked;
+      const agree_marketing = document.getElementById('agree-marketing').checked;
 
       try {
         const response = await fetch('/api/signup', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ name, id, pw, email, phone })
+          body: JSON.stringify({ name, id, pw, email, phone, agree_terms, agree_privacy, agree_marketing })
         });
         const result = await response.json();
 
@@ -125,11 +258,11 @@ document.addEventListener('DOMContentLoaded', () => {
           setTimeout(() => { window.location.href = '/login'; }, 1500);
         } else {
           showAlert(result.message || "회원가입 중 오류가 발생했습니다.");
-          hideLoader(); // 실패 시에만 로더 숨김
+          hideLoader();
         }
       } catch (error) {
         showAlert("네트워크 오류가 발생했습니다.");
-        hideLoader(); // 실패 시에만 로더 숨김
+        hideLoader();
       }
     });
   }
