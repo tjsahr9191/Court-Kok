@@ -148,9 +148,9 @@ function paintSelectionRange(startHHMM, durationMin) {
       let cellClasses = 'date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-gray-700';
 
       if (dateStr === selectedDate) {
-        cellClasses += ' bg-blue-600 text-white font-bold';
+        cellClasses += ' bg-emerald-600 text-white font-bold';
       } else if (isToday) {
-        cellClasses += ' bg-blue-500 text-white font-bold shadow-sm is-today';
+        cellClasses += ' bg-emerald-500 text-white font-bold shadow-sm is-today';
       } else if (hasEvent && !isPast) {
         cellClasses += ' bg-gray-200 font-semibold hover:bg-gray-300';
       } else {

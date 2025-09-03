@@ -14,20 +14,24 @@
 
     <label class="block font-semibold text-gray-800">진행 시간(분)</label> <!-- (I18N) -->
     <div id="duration-options" class="grid grid-cols-4 gap-2 my-2">
-      <!-- 선택 시 스타일 강조 (NEW) -->
       <button data-duration="30"
-              class="duration-btn w-full py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
+                    hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
               aria-pressed="false">30</button>
       <button data-duration="60"
-              class="duration-btn w-full py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
+                    hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
               aria-pressed="false">60</button>
       <button data-duration="90"
-              class="duration-btn w-full py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
+                    hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
               aria-pressed="false">90</button>
       <button data-duration="120"
-              class="duration-btn w-full py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
+                    hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
               aria-pressed="false">120</button>
     </div>
+
     <!-- 선택결과를 다른 스크립트가 쉽게 읽도록 숨은 필드 제공 (NEW, 선택) -->
     <input type="hidden" id="duration-selected" value="">
 
@@ -35,12 +39,12 @@
       <div>
         <label for="min-participants" class="block text-sm font-medium text-gray-700">최소 인원</label> <!-- (I18N) -->
         <input type="number" id="min-participants" value="2" min="1" step="1" inputmode="numeric"
-               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
       </div>
       <div>
         <label for="max-participants" class="block text-sm font-medium text-gray-700">최대 인원</label> <!-- (I18N) -->
         <input type="number" id="max-participants" value="4" min="1" step="1" inputmode="numeric"
-               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
       </div>
       <p id="participants-help" class="col-span-2 text-xs text-gray-500">
         * 최대 인원은 최소 인원보다 크거나 같아야 합니다. <!-- (UX) -->
@@ -48,7 +52,7 @@
     </div>
 
     <button id="create-event-submit-btn"
-            class="w-full mt-6 bg-blue-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            class="w-full mt-6 bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300">
       생성하기
     </button> <!-- (I18N) -->
   </div>
@@ -96,11 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function selectDuration(btn) {
     durationBtns.forEach(b => {
       b.setAttribute('aria-pressed', 'false');
-      b.classList.remove('ring-2','ring-blue-500','bg-blue-600','text-white');
+      b.classList.remove('ring-2','ring-emerald-300','bg-emerald-400','text-white');
       b.classList.add('bg-white','text-gray-700');
     });
     btn.setAttribute('aria-pressed', 'true');
-    btn.classList.add('ring-2','ring-blue-500','bg-blue-600','text-white');
+    btn.classList.add('ring-2','ring-emerald-300','bg-emerald-400','text-white');
     btn.classList.remove('text-gray-700');
     if (durationHidden) durationHidden.value = btn.dataset.duration || '';
   }
