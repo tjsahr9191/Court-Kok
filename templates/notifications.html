@@ -21,8 +21,8 @@
               <span class="block w-3 h-3 bg-red-400 rounded-full"></span>
             {% elif notification.color == 'green' %}
               <span class="block w-3 h-3 bg-green-500 rounded-full"></span>
-            {% elif notification.color == 'blue' %}
-              <span class="block w-3 h-3 bg-blue-500 rounded-full"></span>
+            {% elif notification.color == 'emerald' %}
+              <span class="block w-3 h-3 bg-emerald-500 rounded-full"></span>
             {% else %}
               <span class="block w-3 h-3 bg-gray-400 rounded-full"></span>
             {% endif %}
@@ -72,7 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const seeMoreBtn = document.getElementById('see-more-btn');
     const allItems = Array.from(container.querySelectorAll('.notification-item'));
 
-    // --- 더보기 (See More) Logic ---
     const showItems = () => {
         const hiddenItems = allItems.filter(item => item.classList.contains('hidden'));
         const itemsToShow = hiddenItems.slice(0, 5);
@@ -83,7 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Initially hide items beyond the 5th
     if (allItems.length > 5) {
         allItems.slice(5).forEach(item => item.classList.add('hidden'));
     }
@@ -91,28 +89,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (seeMoreBtn) {
         seeMoreBtn.addEventListener('click', showItems);
     }
-    
-    // --- Delete Notification Logic (Event Delegation) ---
+
     container.addEventListener('click', async (e) => {
         const deleteBtn = e.target.closest('.delete-notification-btn');
         if (!deleteBtn) return;
-        
+
         const notifItem = deleteBtn.closest('.notification-item');
         const notifId = notifItem.dataset.id;
-        
+
         if (!notifId) return;
 
         showLoader();
         try {
             const res = await authedFetch(`/api/notifications/${notifId}`, { method: 'DELETE' });
             if (res.ok) {
-                // Fade out and remove element
                 notifItem.style.transition = 'opacity 0.3s ease';
                 notifItem.style.opacity = '0';
                 setTimeout(() => {
                     notifItem.remove();
-                    if (container.children.length === 0 || container.querySelectorAll('.notification-item:not(.hidden)').length === 0) {
-                        container.innerHTML = `<p class="text-center text-gray-500 py-10">새로운 알림이 없습니다.</p>`;
+                    if (container.children.length === 0 || container.querySelectorAll('.notification-item').length === 0) {
+                         container.innerHTML = `<p id="no-notifications" class="text-center text-gray-500 py-10">새로운 알림이 없습니다.</p>`;
                     }
                 }, 300);
             } else {
