@@ -28,439 +28,489 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  // === DOM Elements ===
-  const calendarGrid = document.getElementById('calendar-grid');
-  const currentMonthYearDisplay = document.getElementById('current-month-year');
-  const prevMonthBtn = document.getElementById('prev-month-btn');
-  const nextMonthBtn = document.getElementById('next-month-btn');
-  const dailyScheduleContainer = document.getElementById('daily-schedule-container');
-  const scheduleDateDisplay   = document.getElementById('schedule-date');
-  const scheduleSlotsContainer= document.getElementById('schedule-slots');
-  const eventDetailsContainer = document.getElementById('event-details-container');
-  const createEventView       = document.getElementById('create-event-view');
-  const viewEventAvailable    = document.getElementById('view-event-available');
-  const viewEventFull         = document.getElementById('view-event-full');
-  const durationOptions       = document.getElementById('duration-options');
-  const createEventBtn        = document.getElementById('create-event-submit-btn');
-  const signupEventBtn        = document.getElementById('signup-event-btn');
+document.addEventListener('DOMContentLoaded',
+    () => {
+        // === DOM Elements ===
+        const calendarGrid = document.getElementById('calendar-grid');
+        const currentMonthYearDisplay = document.getElementById('current-month-year');
+        const prevMonthBtn = document.getElementById('prev-month-btn');
+        const nextMonthBtn = document.getElementById('next-month-btn');
+        const dailyScheduleContainer = document.getElementById('daily-schedule-container');
+        const scheduleDateDisplay = document.getElementById('schedule-date');
+        const scheduleSlotsContainer = document.getElementById('schedule-slots');
+        const eventDetailsContainer = document.getElementById('event-details-container');
+        const createEventView = document.getElementById('create-event-view');
+        const viewEventAvailable = document.getElementById('view-event-available');
+        const viewEventFull = document.getElementById('view-event-full');
+        const durationOptions = document.getElementById('duration-options');
+        const createEventBtn = document.getElementById('create-event-submit-btn');
+        const signupEventBtn = document.getElementById('signup-event-btn');
 
-  // === State ===
-  let currentDate = new Date();
-  let selectedDate = null;
-  let selectedTimeSlot = null;
-  let selectedDuration = null;
-  let selectedEventId = null;
+        // === State ===
+        let currentDate = new Date();
+        let selectedDate = null;
+        let selectedTimeSlot = null;
+        let selectedDuration = null;
+        let selectedEventId = null;
 
-  // === Selection Paint Helpers (REPLACE) ===
-function clearSelectionPaint() {
-  if (!scheduleSlotsContainer) return;
-  // 붙여둔 오버레이 제거
-  scheduleSlotsContainer
-    .querySelectorAll('.slot-select-overlay')
-    .forEach(el => el.remove());
-  // 표식 클래스 제거(혹시 남아있다면)
-  scheduleSlotsContainer
-    .querySelectorAll('.time-slot.slot-selected')
-    .forEach(el => el.classList.remove('slot-selected'));
-}
-
-function minutesFromHHMM(hhmm) {
-  if (!hhmm) return null;
-  const [h, m] = hhmm.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function paintSelectionRange(startHHMM, durationMin) {
-  if (!scheduleSlotsContainer || !startHHMM || !durationMin) return;
-  clearSelectionPaint();
-
-  const startMin = minutesFromHHMM(startHHMM);
-  const endMin = startMin + Number(durationMin);
-
-  for (let m = startMin; m < endMin; m += 30) {
-    const hh = String(Math.floor(m / 60)).padStart(2, '0');
-    const mm = String(m % 60).padStart(2, '0');
-    const slot = scheduleSlotsContainer.querySelector(`.time-slot[data-time="${hh}:${mm}"]`);
-    if (!slot || slot.dataset.type !== 'empty') continue;
-
-    // 테두리 두께 파악 (정시: border-t-2, 그 외: border-t)
-    const isOnTheHour = slot.classList.contains('border-t-2');
-    const topGapPx = isOnTheHour ? 2 : 1; // 선 안 가리게 살짝 띄움
-
-    // 이미 오버레이가 있으면 건너뜀
-    if (slot.querySelector('.slot-select-overlay')) continue;
-
-    // 오버레이 생성: 선은 그대로, 내부만 살짝 연두색
-    const overlay = document.createElement('div');
-    overlay.className = 'slot-select-overlay pointer-events-none absolute left-0 right-0 rounded-md';
-    // Tailwind만으로는 top 미세조정이 빡세니 style로 px 지정
-    overlay.style.top = `${topGapPx}px`;
-    overlay.style.bottom = '0px';
-    overlay.style.backgroundColor = 'rgba(74, 222, 128, 0.25)'; // #4ade80 @25% (연두)
-    // 슬롯을 상대 위치 컨테이너로
-    if (getComputedStyle(slot).position === 'static') {
-      slot.style.position = 'relative';
-    }
-    slot.appendChild(overlay);
-    slot.classList.add('slot-selected');
-  }
-}
-
-
-  // === UI Rendering ===
-  async function renderCalendar(date) {
-    if (!calendarGrid || !currentMonthYearDisplay) return;
-    calendarGrid.innerHTML = '';
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    currentMonthYearDisplay.textContent = `${year}년 ${month + 1}월`;
-
-    let eventDatesSet = new Set();
-    try {
-      const response = await window.authedFetch(`/api/events/summary?year=${year}&month=${month + 1}`);
-      if (response.ok) {
-        const data = await response.json();
-        eventDatesSet = new Set(data.dates_with_events);
-      } else {
-        console.error("Failed to fetch event summary");
-      }
-    } catch (error) {
-      if (error.message !== 'Unauthorized') {
-        console.error("Error fetching event summary:", error);
-      }
-    }
-
-    const firstDayOfMonth = new Date(year, month, 1).getDay();
-    const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
-
-    // 오늘(시간 제거)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (let day = 1; day <= lastDateOfMonth; day++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const currentDateInLoop = new Date(dateStr);
-      const isToday = (currentDateInLoop.getTime() === today.getTime());
-      const isPast = currentDateInLoop < today;
-      const hasEvent = eventDatesSet.has(dateStr);
-
-      let cellClasses = 'date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-gray-700';
-
-      if (dateStr === selectedDate) {
-        cellClasses += ' bg-blue-600 text-white font-bold';
-      } else if (isToday) {
-        cellClasses += ' bg-blue-500 text-white font-bold shadow-sm is-today';
-      } else if (hasEvent && !isPast) {
-        cellClasses += ' bg-gray-200 font-semibold hover:bg-gray-300';
-      } else {
-        cellClasses += ' hover:bg-gray-100';
-      }
-
-      const cell = `<div class="${cellClasses}" data-date="${dateStr}" tabindex="0" role="button" aria-label="${day}일"> ${day} </div>`;
-      calendarGrid.insertAdjacentHTML('beforeend', cell);
-    }
-  }
-
-  async function renderDailySchedule(dateStr) {
-    window.showLoader();
-    const [year, month, day] = dateStr.split('-');
-    if (scheduleDateDisplay) scheduleDateDisplay.textContent = `${year}년 ${month}월 ${day}일`;
-
-    try {
-      const response = await window.authedFetch(`/api/events?date=${dateStr}`);
-      if (!response.ok) throw new Error('일정 데이터를 불러오지 못했습니다.');
-      const data = await response.json();
-      const events = data.events || [];
-
-      const eventMap = new Map();
-      events.forEach(event => {
-        const startTime = event.time;
-        for (let i = 0; i < event.duration; i += 30) {
-          const slotDate = new Date(`${dateStr}T${startTime}:00`);
-          slotDate.setMinutes(slotDate.getMinutes() + i);
-          const slotTime = `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}`;
-          eventMap.set(slotTime, { isStart: i === 0, event });
+        // === Selection Paint Helpers (REPLACE) ===
+        function clearSelectionPaint() {
+            if (!scheduleSlotsContainer) return;
+            // 붙여둔 오버레이 제거
+            scheduleSlotsContainer
+                .querySelectorAll('.slot-select-overlay')
+                .forEach(el => el.remove());
+            // 표식 클래스 제거(혹시 남아있다면)
+            scheduleSlotsContainer
+                .querySelectorAll('.time-slot.slot-selected')
+                .forEach(el => el.classList.remove('slot-selected'));
         }
-      });
 
-      scheduleSlotsContainer.innerHTML = '';
-      for (let hour = 8; hour < 22; hour++) {
-        for (let minute = 0; minute < 60; minute += 30) {
-          const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-          const slotEventInfo = eventMap.get(timeStr);
+        function minutesFromHHMM(hhmm) {
+            if (!hhmm) return null;
+            const [h, m] = hhmm.split(':').map(Number);
+            return h * 60 + m;
+        }
 
-          const borderClass = minute === 0 ? 'border-t-2 border-gray-400' : 'border-t border-dashed border-gray-300';
-          let slotClass = 'bg-gray-200 hover:bg-gray-300 text-gray-600';
-          let slotText = timeStr;
-          let slotType = 'empty';
-          let eventData = '{}';
+        function paintSelectionRange(startHHMM, durationMin) {
+            if (!scheduleSlotsContainer || !startHHMM || !durationMin) return;
+            clearSelectionPaint();
 
-          if (slotEventInfo) {
-            const isFull = slotEventInfo.event.current >= slotEventInfo.event.max;
-            slotClass = isFull ? 'bg-pink-300 text-white' : 'bg-green-300 text-white';
-            slotType = isFull ? 'full' : 'available';
-            eventData = JSON.stringify(slotEventInfo.event);
-            if (slotEventInfo.isStart) {
-              slotText = `${timeStr} · ${slotEventInfo.event.current} / ${slotEventInfo.event.max}명`;
-            } else {
-              slotText = `&nbsp;`;
-              slotClass += ' opacity-80';
+            const startMin = minutesFromHHMM(startHHMM);
+            const endMin = startMin + Number(durationMin);
+
+            for (let m = startMin; m < endMin; m += 30) {
+                const hh = String(Math.floor(m / 60)).padStart(2, '0');
+                const mm = String(m % 60).padStart(2, '0');
+                const slot = scheduleSlotsContainer.querySelector(`.time-slot[data-time="${hh}:${mm}"]`);
+                if (!slot || slot.dataset.type !== 'empty') continue;
+
+                // 테두리 두께 파악 (정시: border-t-2, 그 외: border-t)
+                const isOnTheHour = slot.classList.contains('border-t-2');
+                const topGapPx = isOnTheHour ? 2 : 1; // 선 안 가리게 살짝 띄움
+
+                // 이미 오버레이가 있으면 건너뜀
+                if (slot.querySelector('.slot-select-overlay')) continue;
+
+                // 오버레이 생성: 선은 그대로, 내부만 살짝 연두색
+                const overlay = document.createElement('div');
+                overlay.className = 'slot-select-overlay pointer-events-none absolute left-0 right-0 rounded-md';
+                // Tailwind만으로는 top 미세조정이 빡세니 style로 px 지정
+                overlay.style.top = `${topGapPx}px`;
+                overlay.style.bottom = '0px';
+                overlay.style.backgroundColor = 'rgba(74, 222, 128, 0.25)'; // #4ade80 @25% (연두)
+                // 슬롯을 상대 위치 컨테이너로
+                if (getComputedStyle(slot).position === 'static') {
+                    slot.style.position = 'relative';
+                }
+                slot.appendChild(overlay);
+                slot.classList.add('slot-selected');
             }
-          }
+        }
 
-          const slot = `
+
+        // === UI Rendering ===
+        async function renderCalendar(date) {
+            if (!calendarGrid || !currentMonthYearDisplay) return;
+            calendarGrid.innerHTML = '';
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            currentMonthYearDisplay.textContent = `${year}년 ${month + 1}월`;
+
+            let eventDatesSet = new Set();
+            try {
+                const response = await window.authedFetch(`/api/events/summary?year=${year}&month=${month + 1}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    eventDatesSet = new Set(data.dates_with_events);
+                } else {
+                    console.error("Failed to fetch event summary");
+                }
+            } catch (error) {
+                if (error.message !== 'Unauthorized') {
+                    console.error("Error fetching event summary:", error);
+                }
+            }
+
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
+
+            // 오늘(시간 제거)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            for (let day = 1; day <= lastDateOfMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const currentDateInLoop = new Date(dateStr);
+                const isToday = (currentDateInLoop.getTime() === today.getTime());
+                const isPast = currentDateInLoop < today;
+                const hasEvent = eventDatesSet.has(dateStr);
+
+                let cellClasses = 'date-cell h-12 flex items-center justify-center cursor-pointer rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-gray-700';
+
+                if (dateStr === selectedDate) {
+                    cellClasses += ' bg-blue-600 text-white font-bold';
+                } else if (isToday) {
+                    cellClasses += ' bg-blue-500 text-white font-bold shadow-sm is-today';
+                } else if (hasEvent && !isPast) {
+                    cellClasses += ' bg-gray-200 font-semibold hover:bg-gray-300';
+                } else {
+                    cellClasses += ' hover:bg-gray-100';
+                }
+
+                const cell = `<div class="${cellClasses}" data-date="${dateStr}" tabindex="0" role="button" aria-label="${day}일"> ${day} </div>`;
+                calendarGrid.insertAdjacentHTML('beforeend', cell);
+            }
+        }
+
+        async function renderDailySchedule(dateStr) {
+            window.showLoader();
+            const [year, month, day] = dateStr.split('-');
+            if (scheduleDateDisplay) scheduleDateDisplay.textContent = `${year}년 ${month}월 ${day}일`;
+
+            try {
+                const response = await window.authedFetch(`/api/events?date=${dateStr}`);
+                if (!response.ok) throw new Error('일정 데이터를 불러오지 못했습니다.');
+                const data = await response.json();
+                const events = data.events || [];
+
+                const eventMap = new Map();
+                events.forEach(event => {
+                    const startTime = event.time;
+                    for (let i = 0; i < event.duration; i += 30) {
+                        const slotDate = new Date(`${dateStr}T${startTime}:00`);
+                        slotDate.setMinutes(slotDate.getMinutes() + i);
+                        const slotTime = `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}`;
+                        eventMap.set(slotTime, {isStart: i === 0, event});
+                    }
+                });
+
+                scheduleSlotsContainer.innerHTML = '';
+                for (let hour = 8; hour < 22; hour++) {
+                    for (let minute = 0; minute < 60; minute += 30) {
+                        const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                        const slotEventInfo = eventMap.get(timeStr);
+
+                        const borderClass = minute === 0 ? 'border-t-2 border-gray-400' : 'border-t border-dashed border-gray-300';
+                        let slotClass = 'bg-gray-200 hover:bg-gray-300 text-gray-600';
+                        let slotText = timeStr;
+                        let slotType = 'empty';
+                        let eventData = '{}';
+
+                        if (slotEventInfo) {
+                            const isFull = slotEventInfo.event.current >= slotEventInfo.event.max;
+                            slotClass = isFull ? 'bg-pink-300 text-white' : 'bg-green-300 text-white';
+                            slotType = isFull ? 'full' : 'available';
+                            eventData = JSON.stringify(slotEventInfo.event);
+                            if (slotEventInfo.isStart) {
+                                slotText = `${timeStr} · ${slotEventInfo.event.current} / ${slotEventInfo.event.max}명`;
+                            } else {
+                                slotText = `&nbsp;`;
+                                slotClass += ' opacity-80';
+                            }
+                        }
+
+                        const slot = `
             <div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                  data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'
                  tabindex="0" role="button" aria-label="${timeStr}">
               ${slotText}
             </div>`;
-          scheduleSlotsContainer.insertAdjacentHTML('beforeend', slot);
+                        scheduleSlotsContainer.insertAdjacentHTML('beforeend', slot);
+                    }
+                }
+
+                // (ADD) '모임 만들기' 뷰가 열려 있고, 이미 시작/지속시간이 선택돼 있다면 재도색
+                if (createEventView && !createEventView.classList.contains('hidden') && selectedTimeSlot && selectedDuration) {
+                    paintSelectionRange(selectedTimeSlot, selectedDuration);
+                }
+            } catch (error) {
+                if (error.message !== 'Unauthorized') {
+                    window.showAlert("일정을 불러오는 데 실패했습니다. 다시 시도해 주세요.");
+                }
+            } finally {
+                window.hideLoader();
+            }
         }
-      }
 
-      // (ADD) '모임 만들기' 뷰가 열려 있고, 이미 시작/지속시간이 선택돼 있다면 재도색
-      if (createEventView && !createEventView.classList.contains('hidden') && selectedTimeSlot && selectedDuration) {
-        paintSelectionRange(selectedTimeSlot, selectedDuration);
-      }
-    } catch (error) {
-      if (error.message !== 'Unauthorized') {
-        window.showAlert("일정을 불러오는 데 실패했습니다. 다시 시도해 주세요.");
-      }
-    } finally {
-      window.hideLoader();
-    }
-  }
+        function showEventDetailView(viewToShow) {
+            if (!createEventView || !viewEventAvailable || !viewEventFull || !eventDetailsContainer) return;
+            createEventView.classList.add('hidden');
+            viewEventAvailable.classList.add('hidden');
+            viewEventFull.classList.add('hidden');
+            eventDetailsContainer.classList.toggle('hidden', viewToShow === 'none');
+            if (viewToShow === 'create') createEventView.classList.remove('hidden');
+            if (viewToShow === 'available') viewEventAvailable.classList.remove('hidden');
+            if (viewToShow === 'full') viewEventFull.classList.remove('hidden');
 
-  function showEventDetailView(viewToShow) {
-    if (!createEventView || !viewEventAvailable || !viewEventFull || !eventDetailsContainer) return;
-    createEventView.classList.add('hidden');
-    viewEventAvailable.classList.add('hidden');
-    viewEventFull.classList.add('hidden');
-    eventDetailsContainer.classList.toggle('hidden', viewToShow === 'none');
-    if (viewToShow === 'create')   createEventView.classList.remove('hidden');
-    if (viewToShow === 'available')viewEventAvailable.classList.remove('hidden');
-    if (viewToShow === 'full')     viewEventFull.classList.remove('hidden');
-
-    // (ADD) 'create'가 아닐 땐 선택 하이라이트 제거
-    if (viewToShow !== 'create') {
-      clearSelectionPaint();
-    }
-  }
-
-  function formatKoreanDate(dateStr) {
-    const [y, m, d] = dateStr.split('-');
-    return `${y}년 ${m}월 ${d}일`;
-  }
-
-  async function handleDateClick(e) {
-    const cell = e.target.closest('.date-cell');
-    if (!cell) return;
-
-    selectedDate = cell.dataset.date;
-
-    // (ADD) 날짜 바뀌면 선택 초기화
-    selectedTimeSlot = null;
-    selectedDuration = null;
-    clearSelectionPaint();
-
-    await renderCalendar(currentDate);
-
-    if (dailyScheduleContainer) dailyScheduleContainer.classList.remove('hidden');
-    showEventDetailView('none');
-    await renderDailySchedule(selectedDate);
-  }
-
-  function handleTimeSlotClick(e) {
-    const slot = e.target.closest('.time-slot');
-    if (!slot) return;
-    selectedTimeSlot = slot.dataset.time;
-    const slotType = slot.dataset.type;
-    const eventData = JSON.parse(slot.dataset.event || '{}');
-    selectedEventId = eventData.id || null;
-
-    if (slotType === 'empty') {
-      // (ADD) 기존 선택 하이라이트 제거
-      clearSelectionPaint();
-
-      showEventDetailView('create');
-      const dt = document.getElementById('create-event-date-time');
-      if (dt) dt.textContent = `${formatKoreanDate(selectedDate)} ${selectedTimeSlot}`;
-
-      const allSlots = Array.from(scheduleSlotsContainer.querySelectorAll('.time-slot'));
-      const clickedIndex = allSlots.findIndex(s => s.dataset.time === selectedTimeSlot);
-      let consecutiveEmpty = 0;
-      for (let i = clickedIndex; i < allSlots.length; i++) {
-        if (allSlots[i].dataset.type === 'empty') consecutiveEmpty++; else break;
-      }
-      const availableMinutes = consecutiveEmpty * 30;
-      document.querySelectorAll('.duration-btn').forEach(btn => {
-        const duration = parseInt(btn.dataset.duration, 10);
-        const disabled = duration > availableMinutes;
-        btn.disabled = disabled;
-        btn.classList.toggle('opacity-40', disabled);
-        btn.classList.toggle('cursor-not-allowed', disabled);
-      });
-      selectedDuration = null;
-      document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
-    } else {
-      const endTime = new Date(`${selectedDate}T${eventData.time}`);
-      endTime.setMinutes(endTime.getMinutes() + eventData.duration);
-      const endTimeStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-      const timeDisplay = `${eventData.time} - ${endTimeStr} (${eventData.duration}분)`;
-      const participantsDisplay = `${eventData.current}명 / ${eventData.max}명`;
-      const creatorIdDisplay = eventData.creator?.id ?? '';
-      const creatorContactDisplay = eventData.creator?.phone ?? '';
-      const dateDisplay = formatKoreanDate(selectedDate);
-
-      if (slotType === 'available') {
-        showEventDetailView('available');
-        document.getElementById('view-available-date').textContent = dateDisplay;
-        document.getElementById('view-available-time').textContent = timeDisplay;
-        document.getElementById('view-available-participants').textContent = participantsDisplay;
-        document.getElementById('view-available-creator-id').textContent = creatorIdDisplay;
-        document.getElementById('view-available-creator-contact').textContent = creatorContactDisplay;
-      } else if (slotType === 'full') {
-        showEventDetailView('full');
-        document.getElementById('view-full-date').textContent = dateDisplay;
-        document.getElementById('view-full-time').textContent = timeDisplay;
-        document.getElementById('view-full-participants').textContent = participantsDisplay;
-        document.getElementById('view-full-creator-id').textContent = creatorIdDisplay;
-        document.getElementById('view-full-creator-contact').textContent = creatorContactDisplay;
-      }
-    }
-  }
-
-  async function handleCreateEvent() {
-    if (!selectedDate || !selectedTimeSlot || !selectedDuration)
-      return window.showAlert("날짜, 시간, 진행 시간을 선택해주세요.");
-
-    const minParticipants = document.getElementById('min-participants').value;
-    const maxParticipants = document.getElementById('max-participants').value;
-
-    if (+minParticipants > +maxParticipants)
-      return window.showAlert("최소 인원은 최대 인원보다 많을 수 없습니다.");
-    if (+minParticipants <= 0 || +maxParticipants <= 0)
-      return window.showAlert("참여 인원은 1명 이상이어야 합니다.");
-
-    window.showLoader();
-    try {
-      const response = await window.authedFetch('/api/events', {
-        method: 'POST',
-        body: JSON.stringify({
-          date: selectedDate,
-          time: selectedTimeSlot,
-          duration: parseInt(selectedDuration),
-          min_participants: parseInt(minParticipants),
-          max_participants: parseInt(maxParticipants)
-        })
-      });
-      const result = await response.json();
-      if (response.ok) {
-        window.showAlert(result.message);
-        showEventDetailView('none');
-        await renderDailySchedule(selectedDate);
-        await renderCalendar(currentDate);
-      } else {
-        window.showAlert(result.message || "모임 생성에 실패했습니다.");
-      }
-    } catch (error) {
-      if (error.message !== 'Unauthorized') window.showAlert("모임 생성에 실패했습니다.");
-    } finally {
-      window.hideLoader();
-    }
-  }
-
-  async function handleSignupEvent() {
-    if (!selectedEventId) return window.showAlert("선택된 모임이 없습니다.");
-    window.showLoader();
-    try {
-      const response = await window.authedFetch(`/api/events/${selectedEventId}/signup`, { method: 'POST' });
-      const result = await response.json();
-      if (response.ok) {
-        window.showAlert(result.message);
-        showEventDetailView('none');
-        await renderDailySchedule(selectedDate);
-        await renderCalendar(currentDate); // 참가 신청 후 달력도 갱신
-      } else {
-        window.showAlert(result.message || "참가 신청에 실패했습니다.");
-      }
-    } catch (error) {
-      if (error.message !== 'Unauthorized') window.showAlert("참가 신청에 실패했습니다.");
-    } finally {
-      window.hideLoader();
-    }
-  }
-
-  // === WebSocket Listener ===
-  const onWsMessage = async (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.type === 'event_update') {
-        const eventDate = new Date(data.date);
-        if (eventDate.getFullYear() === currentDate.getFullYear() && eventDate.getMonth() === currentDate.getMonth()) {
-          await renderCalendar(currentDate);
+            // (ADD) 'create'가 아닐 땐 선택 하이라이트 제거
+            if (viewToShow !== 'create') {
+                clearSelectionPaint();
+            }
         }
-        if (data.date === selectedDate) {
-          await renderDailySchedule(selectedDate);
+
+        function formatKoreanDate(dateStr) {
+            const [y, m, d] = dateStr.split('-');
+            return `${y}년 ${m}월 ${d}일`;
         }
-      }
-    } catch (_) {}
-  };
 
-  // === INITIALIZATION ===
-  const init = async () => {
-    window.showLoader();
-    try {
-      if (prevMonthBtn) prevMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() - 1); renderCalendar(currentDate); });
-      if (nextMonthBtn) nextMonthBtn.addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); renderCalendar(currentDate); });
-      if (calendarGrid) calendarGrid.addEventListener('click', handleDateClick);
-      if (scheduleSlotsContainer) scheduleSlotsContainer.addEventListener('click', handleTimeSlotClick);
-      if (createEventBtn) createEventBtn.addEventListener('click', handleCreateEvent);
-      if (signupEventBtn) signupEventBtn.addEventListener('click', handleSignupEvent);
-      if (durationOptions) {
-        durationOptions.addEventListener('click', (e) => {
-          const btn = e.target.closest('.duration-btn');
-          if (!btn || btn.disabled) return;
-          document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
-          btn.classList.add('bg-blue-500', 'text-white');
-          selectedDuration = btn.dataset.duration;
+        async function handleDateClick(e) {
+            const cell = e.target.closest('.date-cell');
+            if (!cell) return;
 
-          // (ADD) 선택한 시작시간 + 지속시간으로 구간 하이라이트
-          if (selectedTimeSlot) {
-            paintSelectionRange(selectedTimeSlot, selectedDuration);
-          }
-        });
-      }
+            selectedDate = cell.dataset.date;
 
-      window.connectWebSocket();
-      window.addEventListener('ws:open', () => {
-        if (window.ws) window.ws.addEventListener('message', onWsMessage);
-      });
-      if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.addEventListener('message', onWsMessage);
-      }
+            // (ADD) 날짜 바뀌면 선택 초기화
+            selectedTimeSlot = null;
+            selectedDuration = null;
+            clearSelectionPaint();
 
-      const today = new Date();
-      selectedDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            await renderCalendar(currentDate);
 
-      await renderCalendar(currentDate);
-      await renderDailySchedule(selectedDate);
+            if (dailyScheduleContainer) dailyScheduleContainer.classList.remove('hidden');
+            showEventDetailView('none');
+            await renderDailySchedule(selectedDate);
+        }
 
-      if (dailyScheduleContainer) dailyScheduleContainer.classList.remove('hidden');
-      showEventDetailView('none');
+        function handleTimeSlotClick(e) {
+            const slot = e.target.closest('.time-slot');
+            if (!slot) return;
+            selectedTimeSlot = slot.dataset.time;
+            const slotType = slot.dataset.type;
+            const eventData = JSON.parse(slot.dataset.event || '{}');
+            selectedEventId = eventData.id || null;
 
-    } catch (error) {
-      if (error.message !== 'Unauthorized') {
-        console.error("Initialization failed:", error);
-        window.showAlert("페이지 초기화에 실패했습니다.");
-      }
-    } finally {
-      window.hideLoader();
-    }
-  };
+            if (slotType === 'empty') {
+                // (ADD) 기존 선택 하이라이트 제거
+                clearSelectionPaint();
 
-  init();
-});
+                showEventDetailView('create');
+                const dt = document.getElementById('create-event-date-time');
+                if (dt) dt.textContent = `${formatKoreanDate(selectedDate)} ${selectedTimeSlot}`;
+
+                const allSlots = Array.from(scheduleSlotsContainer.querySelectorAll('.time-slot'));
+                const clickedIndex = allSlots.findIndex(s => s.dataset.time === selectedTimeSlot);
+                let consecutiveEmpty = 0;
+                for (let i = clickedIndex; i < allSlots.length; i++) {
+                    if (allSlots[i].dataset.type === 'empty') consecutiveEmpty++; else break;
+                }
+                const availableMinutes = consecutiveEmpty * 30;
+                document.querySelectorAll('.duration-btn').forEach(btn => {
+                    const duration = parseInt(btn.dataset.duration, 10);
+                    const disabled = duration > availableMinutes;
+                    btn.disabled = disabled;
+                    btn.classList.toggle('opacity-40', disabled);
+                    btn.classList.toggle('cursor-not-allowed', disabled);
+                });
+                selectedDuration = null;
+                document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+            } else {
+                const endTime = new Date(`${selectedDate}T${eventData.time}`);
+                endTime.setMinutes(endTime.getMinutes() + eventData.duration);
+                const endTimeStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+                const timeDisplay = `${eventData.time} - ${endTimeStr} (${eventData.duration}분)`;
+                const participantsDisplay = `${eventData.current}명 / ${eventData.max}명`;
+                const creatorIdDisplay = eventData.creator?.id ?? '';
+                const creatorContactDisplay = eventData.creator?.phone ?? '';
+                const dateDisplay = formatKoreanDate(selectedDate);
+
+                if (slotType === 'available') {
+                    showEventDetailView('available');
+                    document.getElementById('view-available-date').textContent = dateDisplay;
+                    document.getElementById('view-available-time').textContent = timeDisplay;
+                    document.getElementById('view-available-participants').textContent = participantsDisplay;
+                    document.getElementById('view-available-creator-id').textContent = creatorIdDisplay;
+                    document.getElementById('view-available-creator-contact').textContent = creatorContactDisplay;
+                } else if (slotType === 'full') {
+                    showEventDetailView('full');
+                    document.getElementById('view-full-date').textContent = dateDisplay;
+                    document.getElementById('view-full-time').textContent = timeDisplay;
+                    document.getElementById('view-full-participants').textContent = participantsDisplay;
+                    document.getElementById('view-full-creator-id').textContent = creatorIdDisplay;
+                    document.getElementById('view-full-creator-contact').textContent = creatorContactDisplay;
+                }
+            }
+        }
+
+        async function handleCreateEvent() {
+            if (!selectedDate || !selectedTimeSlot || !selectedDuration)
+                return window.showAlert("날짜, 시간, 진행 시간을 선택해주세요.");
+
+            const minParticipants = document.getElementById('min-participants').value;
+            const maxParticipants = document.getElementById('max-participants').value;
+
+            if (+minParticipants > +maxParticipants)
+                return window.showAlert("최소 인원은 최대 인원보다 많을 수 없습니다.");
+            if (+minParticipants <= 0 || +maxParticipants <= 0)
+                return window.showAlert("참여 인원은 1명 이상이어야 합니다.");
+
+            window.showLoader();
+            try {
+                const response = await window.authedFetch('/api/events', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        date: selectedDate,
+                        time: selectedTimeSlot,
+                        duration: parseInt(selectedDuration),
+                        min_participants: parseInt(minParticipants),
+                        max_participants: parseInt(maxParticipants)
+                    })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    window.showAlert(result.message);
+                    showEventDetailView('none');
+                    await renderDailySchedule(selectedDate);
+                    await renderCalendar(currentDate);
+                } else {
+                    window.showAlert(result.message || "모임 생성에 실패했습니다.");
+                }
+            } catch (error) {
+                if (error.message !== 'Unauthorized') window.showAlert("모임 생성에 실패했습니다.");
+            } finally {
+                window.hideLoader();
+            }
+        }
+
+        async function handleSignupEvent() {
+            if (!selectedEventId) return window.showAlert("선택된 모임이 없습니다.");
+            window.showLoader();
+            try {
+                const response = await window.authedFetch(`/api/events/${selectedEventId}/signup`, {method: 'POST'});
+                const result = await response.json();
+                if (response.ok) {
+                    window.showAlert(result.message);
+                    showEventDetailView('none');
+                    await renderDailySchedule(selectedDate);
+                    await renderCalendar(currentDate); // 참가 신청 후 달력도 갱신
+                } else {
+                    window.showAlert(result.message || "참가 신청에 실패했습니다.");
+                }
+            } catch (error) {
+                if (error.message !== 'Unauthorized') window.showAlert("참가 신청에 실패했습니다.");
+            } finally {
+                window.hideLoader();
+            }
+        }
+
+        // === WebSocket Listener ===
+        const onWsMessage = async (event) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'event_update') {
+                    // 기존 이벤트 업데이트 로직 (달력 및 일간 스케줄 갱신)
+                    const eventDate = new Date(data.date);
+                    if (eventDate.getFullYear() === currentDate.getFullYear() && eventDate.getMonth() === currentDate.getMonth()) {
+                        await renderCalendar(currentDate);
+                    }
+                    if (data.date === selectedDate) {
+                        await renderDailySchedule(selectedDate);
+                    }
+                }
+                // --- 알림 개수 업데이트 로직 추가 ---
+                else if (data.type === 'notification_update') {
+                    await updateNotificationCount();
+                }
+
+            } catch (_) {
+            }
+        };
+
+        // 수정된 updateNotificationCount 함수
+        async function updateNotificationCount() {
+            try {
+                const response = await window.authedFetch('/api/user_info');
+                if (response.ok) {
+                    const result = await response.json();
+                    const count = result.notificationCount;
+                    const desktopBadge = document.getElementById('notification-badge-desktop');
+                    const mobileBadge = document.getElementById('notification-badge-mobile');
+
+                    if (count > 0) {
+                        // 괄호와 숫자를 포함한 전체 HTML을 생성하여 할당
+                        const badgeHtml = `<span class="text-red-500 font-bold">(${count})</span>`;
+
+                        if (desktopBadge) {
+                            desktopBadge.innerHTML = badgeHtml;
+                            desktopBadge.classList.remove('hidden');
+                        }
+                        if (mobileBadge) {
+                            mobileBadge.innerHTML = badgeHtml;
+                            mobileBadge.classList.remove('hidden');
+                        }
+                    } else {
+                        if (desktopBadge) desktopBadge.classList.add('hidden');
+                        if (mobileBadge) mobileBadge.classList.add('hidden');
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to update notification count:", e);
+            }
+        }
+
+        // === INITIALIZATION ===
+        const init = async () => {
+            window.showLoader();
+            try {
+                if (prevMonthBtn) prevMonthBtn.addEventListener('click', () => {
+                    currentDate.setMonth(currentDate.getMonth() - 1);
+                    renderCalendar(currentDate);
+                });
+                if (nextMonthBtn) nextMonthBtn.addEventListener('click', () => {
+                    currentDate.setMonth(currentDate.getMonth() + 1);
+                    renderCalendar(currentDate);
+                });
+                if (calendarGrid) calendarGrid.addEventListener('click', handleDateClick);
+                if (scheduleSlotsContainer) scheduleSlotsContainer.addEventListener('click', handleTimeSlotClick);
+                if (createEventBtn) createEventBtn.addEventListener('click', handleCreateEvent);
+                if (signupEventBtn) signupEventBtn.addEventListener('click', handleSignupEvent);
+                if (durationOptions) {
+                    durationOptions.addEventListener('click', (e) => {
+                        const btn = e.target.closest('.duration-btn');
+                        if (!btn || btn.disabled) return;
+                        document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+                        btn.classList.add('bg-blue-500', 'text-white');
+                        selectedDuration = btn.dataset.duration;
+
+                        // (ADD) 선택한 시작시간 + 지속시간으로 구간 하이라이트
+                        if (selectedTimeSlot) {
+                            paintSelectionRange(selectedTimeSlot, selectedDuration);
+                        }
+                    });
+                }
+
+                window.connectWebSocket();
+                window.addEventListener('ws:open', () => {
+                    if (window.ws) window.ws.addEventListener('message', onWsMessage);
+                });
+                if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+                    window.ws.addEventListener('message', onWsMessage);
+                }
+
+                const today = new Date();
+                selectedDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+                await renderCalendar(currentDate);
+                await renderDailySchedule(selectedDate);
+
+                // 페이지 초기 로드 시 알림 개수 업데이트
+                await updateNotificationCount();
+
+                if (dailyScheduleContainer) dailyScheduleContainer.classList.remove('hidden');
+                showEventDetailView('none');
+
+            } catch (error) {
+                if (error.message !== 'Unauthorized') {
+                    console.error("Initialization failed:", error);
+                    window.showAlert("페이지 초기화에 실패했습니다.");
+                }
+            } finally {
+                window.hideLoader();
+            }
+        };
+
+        init();
+    });
 </script>
 {% endblock %}

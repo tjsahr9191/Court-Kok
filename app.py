@@ -496,6 +496,21 @@ def cancel_event_signup(event_id):
     broadcast_event_update(event['date'])
     return jsonify({"message": "예약이 성공적으로 취소되었습니다."}), 200
 
+# 모든 웹소켓 클라이언트에게 알림 업데이트를 요청하는 함수 추가
+def broadcast_notification_update():
+    message = json.dumps({"type": "notification_update"})
+    for user_id, sockets in list(clients.items()):
+        for ws in list(sockets):
+            try:
+                ws.send(message)
+            except Exception as e:
+                print(f"Failed to send notification broadcast to {user_id}: {e}")
+                try:
+                    sockets.remove(ws)
+                except ValueError:
+                    pass
+        if not sockets:
+            clients.pop(user_id, None)
 
 @app.route('/api/events/<event_id>', methods=['DELETE'])
 @jwt_required()
@@ -510,6 +525,10 @@ def delete_event(event_id):
     for p_id in participants:
         if p_id != user_id_obj: create_notification(p_id, event, 'cancellation')
     db.events.delete_one({"_id": event_id_obj})
+
+    # --- 알림 개수 업데이트 메시지 전송 로직 추가 ---
+    broadcast_notification_update()
+
     broadcast_event_update(event['date'])
     return jsonify({"message": "모임이 성공적으로 삭제되었습니다."}), 200
 
