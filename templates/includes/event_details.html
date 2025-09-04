@@ -35,6 +35,19 @@
     <!-- 선택결과를 다른 스크립트가 쉽게 읽도록 숨은 필드 제공 (NEW, 선택) -->
     <input type="hidden" id="duration-selected" value="">
 
+        <label class="block font-semibold text-gray-800 mt-4">코트 타입</label>
+        <div id="court-type-options" class="grid grid-cols-2 gap-2 my-2">
+          <button data-court-type="half"
+                  class="court-type-btn w-full py-2 rounded-full border border-gray-300 bg-emerald-500 text-white
+                        hover:bg-emerald-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                  aria-pressed="true">하프 코트</button>
+          <button data-court-type="full"
+                  class="court-type-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
+                        hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                  aria-pressed="false">풀 코트</button>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mt-4">
+
     <div class="grid grid-cols-2 gap-4 mt-4">
       <div>
         <label for="min-participants" class="block text-sm font-medium text-gray-700">최소 인원</label> <!-- (I18N) -->
@@ -63,6 +76,7 @@
     <div class="space-y-2 text-gray-800 text-sm">
       <p><span class="font-semibold">일자:</span> <span id="view-available-date" class="text-gray-700"></span></p>
       <p><span class="font-semibold">시간:</span> <span id="view-available-time" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">코트:</span> <span id="view-available-court-type" class="text-gray-700"></span></p>
       <p><span class="font-semibold">현재 인원:</span> <span id="view-available-participants" class="text-gray-700"></span></p>
       <p><span class="font-semibold">주최자:</span> <span id="view-available-creator-id" class="text-gray-700"></span></p>
       <p><span class="font-semibold">연락처:</span> <span id="view-available-creator-contact" class="text-gray-700"></span></p>
@@ -79,6 +93,7 @@
     <div class="space-y-2 text-gray-800 text-sm">
       <p><span class="font-semibold">일자:</span> <span id="view-full-date" class="text-gray-700"></span></p>
       <p><span class="font-semibold">시간:</span> <span id="view-full-time" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">코트:</span> <span id="view-full-court-type" class="text-gray-700"></span></p>
       <p><span class="font-semibold">현재 인원:</span> <span id="view-full-participants" class="text-gray-700"></span></p>
       <p><span class="font-semibold">주최자:</span> <span id="view-full-creator-id" class="text-gray-700"></span></p>
       <p><span class="font-semibold">연락처:</span> <span id="view-full-creator-contact" class="text-gray-700"></span></p>
@@ -90,71 +105,3 @@
   </div>
 </div>
 
-<!-- 선택/검증 보조 스크립트 (NEW): 페이지의 scripts 블록 어딘가에 넣어도 됨 -->
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  // 진행 시간 선택 토글 (접근성: aria-pressed)
-  const durationBtns = Array.from(document.querySelectorAll('#duration-options .duration-btn'));
-  const durationHidden = document.getElementById('duration-selected');
-
-  function selectDuration(btn) {
-    durationBtns.forEach(b => {
-      b.setAttribute('aria-pressed', 'false');
-      b.classList.remove('ring-2','ring-emerald-300','bg-emerald-400','text-white');
-      b.classList.add('bg-white','text-gray-700');
-    });
-    btn.setAttribute('aria-pressed', 'true');
-    btn.classList.add('ring-2','ring-emerald-300','bg-emerald-400','text-white');
-    btn.classList.remove('text-gray-700');
-    if (durationHidden) durationHidden.value = btn.dataset.duration || '';
-  }
-
-  durationBtns.forEach(btn => {
-    btn.addEventListener('click', () => selectDuration(btn));
-  });
-
-  // 기본값: 60분 선택
-  const defBtn = document.querySelector('#duration-options [data-duration="60"]') || durationBtns[0];
-  if (defBtn) selectDuration(defBtn);
-
-  // 최소/최대 인원 검증 UX
-  const minInput = document.getElementById('min-participants');
-  const maxInput = document.getElementById('max-participants');
-  const help = document.getElementById('participants-help');
-
-  function validateParticipants() {
-    const min = parseInt(minInput.value || '0', 10);
-    const max = parseInt(maxInput.value || '0', 10);
-    const bad = Number.isFinite(min) && Number.isFinite(max) && max < min;
-
-    [minInput, maxInput].forEach(el => {
-      el.classList.toggle('border-red-400', bad);
-      el.classList.toggle('focus:ring-red-400', bad);
-    });
-    if (help) {
-      help.classList.toggle('text-red-600', bad);
-      help.classList.toggle('text-gray-500', !bad);
-    }
-    return !bad;
-  }
-
-  [minInput, maxInput].forEach(el => el && el.addEventListener('input', validateParticipants));
-  validateParticipants();
-
-  // (선택) 제출 버튼 더블클릭 방지용 UX 보조 — 실제 생성 로직은 기존 코드 사용
-  const submitBtn = document.getElementById('create-event-submit-btn');
-  if (submitBtn) {
-    submitBtn.addEventListener('click', () => {
-      // 여기서는 비활성화만 담당. 네 기존 생성 로직에서 성공/실패 후 다시 활성화하면 깔끔.
-      if (!validateParticipants()) return;
-      submitBtn.disabled = true;
-      const orig = submitBtn.textContent;
-      submitBtn.textContent = '처리 중...';
-      setTimeout(() => { // 안전망: 5초 후 자동 복구
-        submitBtn.disabled = false;
-        submitBtn.textContent = orig;
-      }, 5000);
-    }, { passive: true });
-  }
-});
-</script>

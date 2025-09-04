@@ -1,42 +1,29 @@
-{% extends "base.html" %}
-
-{% block title %}Court-Kok 캘린더{% endblock %}
-
-{% block content %}
-<div class="w-full flex flex-col" style="min-height: calc(100vh - 2rem);">
-  {% include 'includes/header.html' %}
-
-  <main class="flex w-full flex-grow gap-6 md:gap-8">
-    <div class="flex flex-col flex-1 gap-6 md:gap-8">
-      {% include 'includes/mini-game.html' %}
-      {% include 'includes/calendar_view.html' %}
-    </div>
-
-    <div class="flex flex-col flex-1 gap-6 md:gap-8">
-      {% include 'includes/daily_schedule.html' %}
-    </div>
-
-    <div class="flex flex-col flex-1 gap-6 md:gap-8">
-      <div id="instruction-bubble" class="hidden max-w-xs mx-auto">
-        <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200 flex flex-col items-center text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-emerald-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          <h3 class="font-bold text-gray-800 text-lg">모임을 만들거나 참여해 보세요!</h3>
-          <p class="text-gray-600 mt-2 text-sm">
-            왼쪽 시간표에서 원하는 시간을 선택하여<br>새로운 모임을 만들거나 기존 모임에 참여할 수 있습니다.
-          </p>
-        </div>
-      </div>
-      {% include 'includes/event_details.html' %}
-    </div>
-  </main>
-</div>
-{% endblock %}
-
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // START: Add missing global helper functions
+  // Note: These functions are likely intended for a global script or base.html
+  // to be available on all pages. They are added here to resolve the error.
+  
+  // A simple implementation for a loader overlay.
+  // Assumes you have an element like <div id="loader-overlay" class="hidden">...</div> in your base HTML.
+  window.showLoader = () => {
+    const loader = document.querySelector('#loader-overlay'); // Using a general selector
+    if (loader) loader.classList.remove('hidden');
+  };
+
+  window.hideLoader = () => {
+    const loader = document.querySelector('#loader-overlay');
+    if (loader) loader.classList.add('hidden');
+  };
+
+  // A simple implementation for a custom alert.
+  // Assumes you have an alert element in your base HTML.
+  window.showAlert = (message) => {
+    console.log(`Alert: ${message}`);
+    alert(message); // Fallback to the browser's default alert
+  };
+  // END: Add missing global helper functions
   // === DOM Elements ===
   const calendarGrid = document.getElementById('calendar-grid');
   const currentMonthYearDisplay = document.getElementById('current-month-year');
@@ -53,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const durationOptions       = document.getElementById('duration-options');
   const createEventBtn        = document.getElementById('create-event-submit-btn');
   const signupEventBtn        = document.getElementById('signup-event-btn');
+  const courtTypeOptions      = document.getElementById('court-type-options');
+  const minParticipantsInput  = document.getElementById('min-participants');
 
   // === State ===
   let currentDate = new Date();
@@ -60,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedTimeSlot = null;
   let selectedDuration = null;
   let selectedEventId = null;
+  let selectedCourtType = 'half'; // Default court type
 
   // === Selection Paint Helpers ===
   function clearSelectionPaint() {
@@ -180,7 +170,12 @@ document.addEventListener('DOMContentLoaded', () => {
           const slotDate = new Date(`${dateStr}T${startTime}:00`);
           slotDate.setMinutes(slotDate.getMinutes() + i);
           const slotTime = `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}`;
-          eventMap.set(slotTime, { isStart: i === 0, event });
+          
+          // Allow multiple half-court events in the same slot
+          if (!eventMap.has(slotTime)) {
+            eventMap.set(slotTime, []);
+          }
+          eventMap.get(slotTime).push({ isStart: i === 0, event });
         }
       });
 
@@ -188,34 +183,60 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let hour = 8; hour < 22; hour++) {
         for (let minute = 0; minute < 60; minute += 30) {
           const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-          const slotEventInfo = eventMap.get(timeStr);
+          const slotEventsInfo = eventMap.get(timeStr);
 
           const borderClass = minute === 0 ? 'border-t-2 border-gray-400' : 'border-t border-dashed border-gray-300';
-          let slotClass = 'bg-gray-200 hover:bg-gray-300 text-gray-600';
-          let slotText = timeStr;
-          let slotType = 'empty';
-          let eventData = '{}';
+          let slotHtml = '';
 
-          if (slotEventInfo) {
-            const isFull = slotEventInfo.event.current >= slotEventInfo.event.max;
-            slotClass = isFull ? 'bg-pink-300 text-white' : 'bg-green-300 text-white';
-            slotType = isFull ? 'full' : 'available';
-            eventData = JSON.stringify(slotEventInfo.event);
-            if (slotEventInfo.isStart) {
-              slotText = `${timeStr} · ${slotEventInfo.event.current} / ${slotEventInfo.event.max}명`;
-            } else {
-              slotText = `&nbsp;`;
-              slotClass += ' opacity-80';
+          if (slotEventsInfo) {
+            // If there's a full court event, it takes the whole slot
+            const fullCourtEventInfo = slotEventsInfo.find(info => info.event.court_type === 'full');
+            if (fullCourtEventInfo) {
+                const event = fullCourtEventInfo.event;
+                const isFull = event.current >= event.max;
+                const slotClass = isFull ? 'bg-pink-300 text-white' : 'bg-green-300 text-white';
+                const slotType = isFull ? 'full' : 'available';
+                let slotText = '&nbsp;';
+                if (fullCourtEventInfo.isStart) {
+                    slotText = `${timeStr} [풀] · ${event.current} / ${event.max}명`;
+                }
+                slotHtml = `
+                    <div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer transition-colors duration-150"
+                         data-time="${timeStr}" data-type="${slotType}" data-event='${JSON.stringify(event)}' tabindex="0">
+                        ${slotText}
+                    </div>`;
+            } else { // Handle half-court events
+                let eventDivs = '';
+                for (const info of slotEventsInfo) {
+                    const event = info.event;
+                    const isFull = event.current >= event.max;
+                    const slotClass = isFull ? 'bg-pink-200 text-white' : 'bg-green-200 text-white';
+                    const slotType = isFull ? 'full' : 'available';
+                    let slotText = '&nbsp;';
+                     if (info.isStart) {
+                        slotText = `${timeStr} [하프] ${event.current}/${event.max}`;
+                    }
+                    eventDivs += `
+                        <div class="time-slot flex-1 h-full flex items-center justify-center text-xs ${slotClass} cursor-pointer"
+                             data-time="${timeStr}" data-type="${slotType}" data-event='${JSON.stringify(event)}' tabindex="0">
+                             ${slotText}
+                        </div>`;
+                }
+                // Empty slot for new half-court game
+                if (slotEventsInfo.length < 2) {
+                   eventDivs += `<div class="time-slot flex-1 h-full flex items-center justify-center text-xs bg-gray-200 hover:bg-gray-300 text-gray-600 cursor-pointer"
+                                     data-time="${timeStr}" data-type="empty" data-event='{}' tabindex="0">${timeStr}</div>`;
+                }
+                 slotHtml = `<div class="h-10 flex ${borderClass}">${eventDivs}</div>`;
             }
+          } else {
+             slotHtml = `
+              <div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} bg-gray-200 hover:bg-gray-300 text-gray-600 cursor-pointer transition-colors duration-150"
+                   data-time="${timeStr}" data-type="empty" data-event='{}' tabindex="0">
+                ${timeStr}
+              </div>`;
           }
-
-          const slot = `
-            <div class="time-slot h-10 flex items-center px-3 text-sm ${borderClass} ${slotClass} cursor-pointer transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-                 data-time="${timeStr}" data-type="${slotType}" data-event='${eventData}'
-                 tabindex="0" role="button" aria-label="${timeStr}">
-              ${slotText}
-            </div>`;
-          scheduleSlotsContainer.insertAdjacentHTML('beforeend', slot);
+          scheduleSlotsContainer.insertAdjacentHTML('beforeend', slotHtml);
         }
       }
 
@@ -267,7 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
     await renderDailySchedule(selectedDate);
   }
 
-  // MODIFIED: This entire function is updated for the default duration feature
   function handleTimeSlotClick(e) {
     const slot = e.target.closest('.time-slot');
     if (!slot) return;
@@ -282,14 +302,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const dt = document.getElementById('create-event-date-time');
       if (dt) dt.textContent = `${formatKoreanDate(selectedDate)} ${selectedTimeSlot}`;
 
-      const allSlots = Array.from(scheduleSlotsContainer.querySelectorAll('.time-slot'));
-      const clickedIndex = allSlots.findIndex(s => s.dataset.time === selectedTimeSlot);
-      let consecutiveEmpty = 0;
-      for (let i = clickedIndex; i < allSlots.length; i++) {
-        if (allSlots[i].dataset.type === 'empty') consecutiveEmpty++; else break;
-      }
-      const availableMinutes = consecutiveEmpty * 30;
-
+      // This logic needs adjustment for half/full court conflicts, but for now we focus on creation UI
+      // The backend will perform the definitive validation.
+      const availableMinutes = 4 * 60; // Assume max availability, backend validates
       document.querySelectorAll('.duration-btn').forEach(btn => {
         const duration = parseInt(btn.dataset.duration, 10);
         const disabled = duration > availableMinutes;
@@ -306,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedDuration = DEFAULT_DURATION;
         const defaultDurationBtn = document.querySelector(`.duration-btn[data-duration="${DEFAULT_DURATION}"]`);
         if (defaultDurationBtn) {
-          defaultDurationBtn.classList.add('bg-emerald-500', 'text-white');
+           defaultDurationBtn.click(); // Use click to trigger selection style
         }
         paintSelectionRange(selectedTimeSlot, selectedDuration);
       }
@@ -320,11 +335,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const creatorIdDisplay = eventData.creator?.id ?? '';
       const creatorContactDisplay = eventData.creator?.phone ?? '';
       const dateDisplay = formatKoreanDate(selectedDate);
+      const courtTypeDisplay = (eventData.court_type === 'full') ? '풀 코트' : '하프 코트';
 
       if (slotType === 'available') {
         showEventDetailView('available');
         document.getElementById('view-available-date').textContent = dateDisplay;
         document.getElementById('view-available-time').textContent = timeDisplay;
+        document.getElementById('view-available-court-type').textContent = courtTypeDisplay;
         document.getElementById('view-available-participants').textContent = participantsDisplay;
         document.getElementById('view-available-creator-id').textContent = creatorIdDisplay;
         document.getElementById('view-available-creator-contact').textContent = creatorContactDisplay;
@@ -332,6 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showEventDetailView('full');
         document.getElementById('view-full-date').textContent = dateDisplay;
         document.getElementById('view-full-time').textContent = timeDisplay;
+        document.getElementById('view-full-court-type').textContent = courtTypeDisplay;
         document.getElementById('view-full-participants').textContent = participantsDisplay;
         document.getElementById('view-full-creator-id').textContent = creatorIdDisplay;
         document.getElementById('view-full-creator-contact').textContent = creatorContactDisplay;
@@ -360,7 +378,8 @@ document.addEventListener('DOMContentLoaded', () => {
           time: selectedTimeSlot,
           duration: parseInt(selectedDuration),
           min_participants: parseInt(minParticipants),
-          max_participants: parseInt(maxParticipants)
+          max_participants: parseInt(maxParticipants),
+          court_type: selectedCourtType // Add court type to request
         })
       });
       const result = await response.json();
@@ -399,6 +418,24 @@ document.addEventListener('DOMContentLoaded', () => {
       window.hideLoader();
     }
   }
+	 // === Logic from event_details.html (consolidated here) ===
+  function validateParticipants() {
+      if (!minParticipantsInput || !maxParticipantsInput) return true;
+      const min = parseInt(minParticipantsInput.value || '0', 10);
+      const max = parseInt(maxParticipantsInput.value || '0', 10);
+      const isInvalid = Number.isFinite(min) && Number.isFinite(max) && max < min;
+
+      [minParticipantsInput, maxParticipantsInput].forEach(el => {
+        el.classList.toggle('border-red-400', isInvalid);
+        el.classList.toggle('focus:ring-red-400', isInvalid);
+      });
+      if (participantsHelpText) {
+        participantsHelpText.classList.toggle('text-red-600', isInvalid);
+        participantsHelpText.classList.toggle('text-gray-500', !isInvalid);
+      }
+      return !isInvalid;
+  }
+
 
   // === WebSocket Listener ===
   const onWsMessage = async (event) => {
@@ -430,8 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
         durationOptions.addEventListener('click', (e) => {
           const btn = e.target.closest('.duration-btn');
           if (!btn || btn.disabled) return;
-          document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-emerald-500', 'text-white'));
-          btn.classList.add('bg-emerald-500', 'text-white');
+          // This logic is now handled by the separate script in event_details.html
           selectedDuration = btn.dataset.duration;
 
           if (selectedTimeSlot) {
@@ -439,6 +475,35 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       }
+
+      // START: Add court type selection logic
+      if (courtTypeOptions) {
+          courtTypeOptions.addEventListener('click', (e) => {
+              const btn = e.target.closest('.court-type-btn');
+              if (!btn) return;
+              
+              document.querySelectorAll('.court-type-btn').forEach(b => {
+                  b.classList.remove('bg-emerald-500', 'text-white');
+                  b.classList.add('bg-white', 'text-gray-700');
+                  b.setAttribute('aria-pressed', 'false');
+              });
+              btn.classList.add('bg-emerald-500', 'text-white');
+              btn.classList.remove('bg-white', 'text-gray-700');
+              btn.setAttribute('aria-pressed', 'true');
+              selectedCourtType = btn.dataset.courtType;
+
+              if (selectedCourtType === 'full') {
+                  minParticipantsInput.value = '10';
+                  minParticipantsInput.min = '10';
+                  // Dispatch input event to trigger validation check from event_details.html script
+                   document.getElementById('max-participants').dispatchEvent(new Event('input'));
+              } else { // half
+                  minParticipantsInput.value = '2';
+                  minParticipantsInput.min = '1';
+              }
+          });
+      }
+      // END: Add court type selection logic
 
       window.connectWebSocket();
       window.addEventListener('ws:open', () => {

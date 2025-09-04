@@ -214,25 +214,29 @@ def broadcast_event_update(event_date):
 
 
 def serialize_created_event(ev, users_coll):
-    # ... (생략 없이 기존 코드 그대로) ...
+    # ... (existing code) ...
     participants_details = []
     for p_id in ev.get('participants', []):
         u = users_coll.find_one({"_id": p_id})
         if u: participants_details.append({"name": u.get('name'), "id": u.get('id'), "phone": u.get('phone')})
     return {"_id": str(ev["_id"]), "date": ev.get("date"), "time": ev.get("time"), "duration": ev.get("duration"),
             "participants": [str(x) for x in ev.get("participants", [])],
-            "max_participants": ev.get("max_participants"), "participants_details": participants_details}
+            "max_participants": ev.get("max_participants"),
+            "court_type": ev.get("court_type", "half"),  # Add this line
+            "participants_details": participants_details}
 
 
 def serialize_attended_event(ev, users_coll):
-    # ... (생략 없이 기존 코드 그대로) ...
+    # ... (existing code) ...
     creator = users_coll.find_one({"_id": ev.get("creator_id")})
     creator_details = None
     if creator: creator_details = {"name": creator.get("name"), "id": creator.get("id"),
                                    "phone": creator.get("phone"), }
     return {"_id": str(ev["_id"]), "date": ev.get("date"), "time": ev.get("time"), "duration": ev.get("duration"),
             "participants": [str(x) for x in ev.get("participants", [])],
-            "max_participants": ev.get("max_participants"), "creator_details": creator_details}
+            "max_participants": ev.get("max_participants"),
+            "court_type": ev.get("court_type", "half"),  # Add this line
+            "creator_details": creator_details}
 
 
 # --- JWT 인증 실패 시 처리 로직 ---
@@ -468,7 +472,6 @@ def mark_notifications_as_read():
 @app.route('/api/events', methods=['GET'])
 @jwt_required()
 def get_events():
-    # ... (생략 없이 기존 코드 그대로) ...
     if db is None: return jsonify({"status": "error", "message": "Database not connected"}), 500
     date_str = request.args.get('date')
     events_cursor = db.events.find({"date": date_str})
@@ -479,10 +482,126 @@ def get_events():
             "id": str(event['_id']), "time": event['time'], "duration": event['duration'],
             "min": event['min_participants'], "max": event['max_participants'],
             "current": len(event.get('participants', [])),
+            "court_type": event.get('court_type', 'half'),  # Add this line
             "creator": {"id": creator_info.get('id', 'N/A'), "phone": creator_info.get('phone', 'N/A')}
         }
         events_list.append(event_data)
     return jsonify({"status": "success", "events": events_list}), 200
+
+@app.route('/api/events', methods=['POST'])
+@jwt_required()
+def create_event():
+    if db is None: return jsonify({"status": "error", "message": "Database not connected"}), 500
+
+    current_user_id = get_jwt_identity()
+    user_id_obj = ObjectId(current_user_id)
+    data = request.json or {}
+
+    # 1. Spam Prevention: Max 10 events created per week
+    today = datetime.utcnow().date()
+    start_of_week = today - timedelta(days=today.weekday())  # Monday
+    end_of_week = start_of_week + timedelta(days=6)  # Sunday
+    start_of_week_str = start_of_week.strftime('%Y-%m-%d')
+    end_of_week_str = end_of_week.strftime('%Y-%m-%d')
+
+    weekly_events_count = db.events.count_documents({
+        "creator_id": user_id_obj,
+        "date": {"$gte": start_of_week_str, "$lte": end_of_week_str}
+    })
+    if weekly_events_count >= 10:
+        return jsonify({"message": "주당 최대 10개의 모임만 생성할 수 있습니다."}), 429
+
+    # 2. Get new event details
+    event_date_str = data.get('date')
+    event_time_str = data.get('time')
+    event_duration = int(data.get('duration'))
+    court_type = data.get('court_type', 'half')
+
+    try:
+        new_event_start_dt = datetime.strptime(f"{event_date_str} {event_time_str}", '%Y-%m-%d %H:%M')
+        new_event_end_dt = new_event_start_dt + timedelta(minutes=event_duration)
+    except (ValueError, TypeError):
+        return jsonify({"message": "Invalid date or time format."}), 400
+
+    # 3. Fetch potentially conflicting events
+    conflicting_events = list(db.events.find({"date": event_date_str}))
+
+    # 4. Apply court-specific rules
+    if court_type == 'full':
+        if int(data.get('min_participants', 0)) < 10:
+            return jsonify({"message": "풀 코트 예약은 최소 10명 이상이어야 합니다."}), 400
+        for existing in conflicting_events:
+            try:
+                existing_start = datetime.strptime(f"{existing['date']} {existing['time']}", '%Y-%m-%d %H:%M')
+                existing_end = existing_start + timedelta(minutes=existing['duration'])
+                if new_event_start_dt < existing_end and existing_start < new_event_end_dt:
+                    return jsonify({"message": "해당 시간에 이미 다른 모임이 있어 풀 코트를 예약할 수 없습니다."}), 409
+            except (KeyError, ValueError): continue
+
+    elif court_type == 'half':
+        half_court_overlap_count = 0
+        for existing in conflicting_events:
+            try:
+                existing_start = datetime.strptime(f"{existing['date']} {existing['time']}", '%Y-%m-%d %H:%M')
+                existing_end = existing_start + timedelta(minutes=existing['duration'])
+                if new_event_start_dt < existing_end and existing_start < new_event_end_dt:
+                    if existing.get('court_type') == 'full':
+                        return jsonify({"message": "해당 시간에 풀 코트 모임이 있어 하프 코트를 예약할 수 없습니다."}), 409
+                    if existing.get('court_type', 'half') == 'half':
+                        half_court_overlap_count += 1
+            except (KeyError, ValueError): continue
+        if half_court_overlap_count >= 2:
+            return jsonify({"message": "해당 시간에는 이미 2개의 하프 코트 모임이 있습니다."}), 409
+
+    # 5. Create event if all checks pass
+    event_doc = {
+        "date": event_date_str, "time": event_time_str, "duration": event_duration,
+        "min_participants": int(data.get('min_participants')), "max_participants": int(data.get('max_participants')),
+        "court_type": court_type,
+        "creator_id": user_id_obj, "participants": [user_id_obj],
+        "created_at": datetime.utcnow(), "reminder_sent": False
+    }
+    db.events.insert_one(event_doc)
+    broadcast_event_update(event_date_str)
+    return jsonify({"message": "모임이 성공적으로 생성되었습니다."}), 201
+
+@app.route('/api/events/<event_id>/signup', methods=['POST'])
+@jwt_required()
+def signup_for_event_atomic(event_id):
+    event_id_obj, user_id_obj = ObjectId(event_id), ObjectId(get_jwt_identity())
+    
+    target_event = db.events.find_one({"_id": event_id_obj})
+    if not target_event:
+        return jsonify({"message": "모임을 찾을 수 없습니다."}), 404
+
+    # Double-booking prevention for half-court games
+    if target_event.get('court_type', 'half') == 'half':
+        try:
+            target_start = datetime.strptime(f"{target_event['date']} {target_event['time']}", '%Y-%m-%d %H:%M')
+            target_end = target_start + timedelta(minutes=target_event['duration'])
+        except (KeyError, ValueError):
+            return jsonify({"message": "모임 시간 정보가 올바르지 않습니다."}), 500
+
+        users_other_events = list(db.events.find({"participants": user_id_obj, "_id": {"$ne": event_id_obj}}))
+        for event in users_other_events:
+            if event.get('court_type', 'half') == 'half':
+                try:
+                    event_start = datetime.strptime(f"{event['date']} {event['time']}", '%Y-%m-%d %H:%M')
+                    event_end = event_start + timedelta(minutes=event['duration'])
+                    if target_start < event_end and event_start < target_end:
+                        return jsonify({"message": "이미 같은 시간에 다른 하프 코트 모임에 참여하고 있습니다."}), 409
+                except (KeyError, ValueError): continue
+
+    # Proceed with atomic update
+    updated_event = db.events.find_one_and_update(
+        {"_id": event_id_obj, "participants": {"$ne": user_id_obj},
+         "$expr": {"$lt": [{"$size": "$participants"}, "$max_participants"]}},
+        {"$push": {"participants": user_id_obj}}, return_document=ReturnDocument.AFTER
+    )
+    if updated_event:
+        broadcast_event_update(updated_event['date'])
+        return jsonify({"message": "참가 신청이 완료되었습니다."}), 200
+    return jsonify({"message": "인원이 가득 찼거나 이미 참여 중인 모임입니다."}), 409
 
 
 # ================= ⬇️ 추가된 API ⬇️ =================
@@ -514,40 +633,6 @@ def get_events_summary():
         print(f"Error in /api/events/summary: {e}")
         return jsonify({"message": "An error occurred while fetching event summary"}), 500
 
-
-# ================= ⬆️ 추가된 API ⬆️ =================
-
-@app.route('/api/events', methods=['POST'])
-@jwt_required()
-def create_event():
-    # ... (생략 없이 기존 코드 그대로) ...
-    if db is None: return jsonify({"status": "error", "message": "Database not connected"}), 500
-    data = request.json or {}
-    event_doc = {
-        "date": data.get('date'), "time": data.get('time'), "duration": int(data.get('duration')),
-        "min_participants": int(data.get('min_participants')), "max_participants": int(data.get('max_participants')),
-        "creator_id": ObjectId(get_jwt_identity()), "participants": [ObjectId(get_jwt_identity())],
-        "created_at": datetime.utcnow(), "reminder_sent": False
-    }
-    db.events.insert_one(event_doc)
-    broadcast_event_update(data.get('date'))
-    return jsonify({"message": "모임이 성공적으로 생성되었습니다."}), 201
-
-
-@app.route('/api/events/<event_id>/signup', methods=['POST'])
-@jwt_required()
-def signup_for_event_atomic(event_id):
-    # ... (생략 없이 기존 코드 그대로) ...
-    event_id_obj, user_id_obj = ObjectId(event_id), ObjectId(get_jwt_identity())
-    updated_event = db.events.find_one_and_update(
-        {"_id": event_id_obj, "participants": {"$ne": user_id_obj},
-         "$expr": {"$lt": [{"$size": "$participants"}, "$max_participants"]}},
-        {"$push": {"participants": user_id_obj}}, return_document=ReturnDocument.AFTER
-    )
-    if updated_event:
-        broadcast_event_update(updated_event['date'])
-        return jsonify({"message": "참가 신청이 완료되었습니다."}), 200
-    return jsonify({"message": "인원이 가득 찼거나 이미 참여 중인 모임입니다."}), 409
 
 
 @app.route('/api/events/<event_id>/signup', methods=['DELETE'])

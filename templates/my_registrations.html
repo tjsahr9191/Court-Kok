@@ -138,6 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dt = toKstDate(ev.date, ev.time);
     const badge = ddayLabel(dt);
     const countNow = Array.isArray(ev.participants) ? ev.participants.length : 0;
+    const courtTypeLabel = (ev.court_type === 'full') ? '풀 코트' : '하프 코트';
 
     const accent = scheme === 'emerald'
       ? { ring: 'ring-emerald-200', title: 'text-emerald-700', chip: 'bg-emerald-100 text-emerald-700' }
@@ -158,6 +159,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </span>
                 <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
                   ${escapeHtml(ev.duration)}분
+                </span>
+                <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+                  ${courtTypeLabel}
                 </span>
                 <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
                   ${countNow} / ${escapeHtml(ev.max_participants)}명
