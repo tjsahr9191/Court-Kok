@@ -6,10 +6,13 @@
 </a>
 
     <div class="hidden md:flex items-center gap-2">
-      <a href="/notifications" id="notifications-link-desktop" class="px-3 py-1.5 rounded-lg text-base font-medium tracking-tight transition-all duration-200 {{ 'text-emerald-600 bg-emerald-50' if request.path.startswith('/notifications') else 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' }}">
-        알림<span id="notification-count-desktop" class="hidden font-bold text-red-500 ml-1.5"></span>
-      </a>
-      <a href="/my_registrations" class="px-3 py-1.5 rounded-lg text-base font-medium tracking-tight transition-all duration-200 {{ 'text-emerald-600 bg-emerald-50' if request.path.startswith('/my_registrations') else 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' }}">
+        <a href="/notifications" class="px-3 py-1.5 rounded-lg text-base font-medium tracking-tight transition-all duration-200 {{ 'text-blue-600 bg-blue-50' if request.path.startswith('/notifications') else 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' }}">
+            알림
+            <span id="notification-badge-desktop" class="ml-1 hidden">
+                (<span class="text-red-500"></span>)
+            </span>
+        </a>
+      <a href="/my_registrations" class="px-3 py-1.5 rounded-lg text-base font-medium tracking-tight transition-all duration-200 {{ 'text-blue-600 bg-blue-50' if request.path.startswith('/my_registrations') else 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' }}">
         모임 목록
       </a>
 
@@ -49,11 +52,13 @@
       </button>
     </div>
     <nav class="flex flex-col gap-2">
-      <a href="/notifications" id="notifications-link-mobile" class="flex items-center justify-between px-3 py-2.5 rounded-lg text-base {{ 'text-emerald-600 bg-emerald-50' if request.path.startswith('/notifications') else 'text-gray-700 hover:bg-gray-50' }}">
-        <span>알림</span>
-        <span id="notification-count-mobile" class="hidden text-sm font-bold text-red-500"></span>
-      </a>
-      <a href="/my_registrations" class="px-3 py-2.5 rounded-lg text-base {{ 'text-emerald-600 bg-emerald-50' if request.path.startswith('/my_registrations') else 'text-gray-700 hover:bg-gray-50' }}">
+     <a href="/notifications" class="flex items-center justify-between px-3 py-2.5 rounded-lg text-base {{ 'text-blue-600 bg-blue-50' if request.path.startswith('/notifications') else 'text-gray-700 hover:bg-gray-50' }}">
+         <span>알림</span>
+         <span id="notification-badge-mobile" class="ml-auto hidden">
+            (<span class="text-red-500"></span>)
+         </span>
+     </a>
+      <a href="/my_registrations" class="px-3 py-2.5 rounded-lg text-base {{ 'text-blue-600 bg-blue-50' if request.path.startswith('/my_registrations') else 'text-gray-700 hover:bg-gray-50' }}">
         모임 목록
       </a>
       <a href="/user_page" class="px-3 py-2.5 rounded-lg text-base text-gray-700 hover:bg-gray-50">
