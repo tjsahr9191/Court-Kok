@@ -1,92 +1,74 @@
-<!-- Event Details/Creation Column (개선판) -->
 <div id="event-details-container"
      class="p-4 bg-white rounded-2xl shadow-lg flex-shrink-0 hidden ml-6 ring-1 ring-gray-100"
      style="flex-basis: 360px;">
 
-  <!-- View: Create New Event -->
   <div id="create-event-view">
-    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 만들기</h3> <!-- (I18N) -->
-    <!-- 선택된 날짜/시간 표시 (UI) -->
+    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 만들기</h3>
     <p id="create-event-date-time"
        class="text-sm text-gray-600 mb-4 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
       일시
     </p>
 
-    <label class="block font-semibold text-gray-800">진행 시간(분)</label> <!-- (I18N) -->
+    <label class="block font-semibold text-gray-800">진행 시간(분)</label>
     <div id="duration-options" class="grid grid-cols-4 gap-2 my-2">
-      <button data-duration="30"
-              class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
-                    hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
-              aria-pressed="false">30</button>
-      <button data-duration="60"
-              class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
-                    hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
-              aria-pressed="false">60</button>
-      <button data-duration="90"
-              class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
-                    hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
-              aria-pressed="false">90</button>
-      <button data-duration="120"
-              class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700
-                    hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
-              aria-pressed="false">120</button>
+      <button data-duration="30" class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300" aria-pressed="false">30</button>
+      <button data-duration="60" class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300" aria-pressed="false">60</button>
+      <button data-duration="90" class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300" aria-pressed="false">90</button>
+      <button data-duration="120" class="duration-btn w-full py-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-emerald-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300" aria-pressed="false">120</button>
     </div>
-
-    <!-- 선택결과를 다른 스크립트가 쉽게 읽도록 숨은 필드 제공 (NEW, 선택) -->
     <input type="hidden" id="duration-selected" value="">
 
+    <div class="mt-4">
+      <label for="event-description" class="block text-sm font-medium text-gray-700">모임 설명 (10자 이내)</label>
+      <input type="text" id="event-description" name="event-description" maxlength="10"
+             class="mt-1 w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+             placeholder="예: 초심자 환영">
+    </div>
     <div class="grid grid-cols-2 gap-4 mt-4">
       <div>
-        <label for="min-participants" class="block text-sm font-medium text-gray-700">최소 인원</label> <!-- (I18N) -->
-        <input type="number" id="min-participants" value="2" min="1" step="1" inputmode="numeric"
-               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
+        <label for="min-participants" class="block text-sm font-medium text-gray-700">최소 인원</label>
+        <input type="number" id="min-participants" value="2" min="1" step="1" inputmode="numeric" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
       </div>
       <div>
-        <label for="max-participants" class="block text-sm font-medium text-gray-700">최대 인원</label> <!-- (I18N) -->
-        <input type="number" id="max-participants" value="4" min="1" step="1" inputmode="numeric"
-               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
+        <label for="max-participants" class="block text-sm font-medium text-gray-700">최대 인원</label>
+        <input type="number" id="max-participants" value="4" min="1" step="1" inputmode="numeric" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
       </div>
-      <p id="participants-help" class="col-span-2 text-xs text-gray-500">
-        * 최대 인원은 최소 인원보다 크거나 같아야 합니다. <!-- (UX) -->
-      </p>
+      <p id="participants-help" class="col-span-2 text-xs text-gray-500">* 최대 인원은 최소 인원보다 크거나 같아야 합니다.</p>
     </div>
 
-    <button id="create-event-submit-btn"
-            class="w-full mt-6 bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300">
+    <button id="create-event-submit-btn" class="w-full mt-6 bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300">
       생성하기
-    </button> <!-- (I18N) -->
+    </button>
   </div>
 
-  <!-- View: View Available Event -->
   <div id="view-event-available" class="hidden">
-    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 정보</h3> <!-- (I18N) -->
+    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 정보</h3>
+    <p id="view-available-description" class="text-lg font-bold text-emerald-600 mb-3 bg-emerald-50 p-2 rounded-md"></p>
     <div class="space-y-2 text-gray-800 text-sm">
-      <p><span class="font-semibold">일자:</span> <span id="view-available-date" class="text-gray-700"></span></p>
-      <p><span class="font-semibold">시간:</span> <span id="view-available-time" class="text-gray-700"></span></p>
-      <p><span class="font-semibold">현재 인원:</span> <span id="view-available-participants" class="text-gray-700"></span></p>
-      <p><span class="font-semibold">주최자:</span> <span id="view-available-creator-id" class="text-gray-700"></span></p>
-      <p><span class="font-semibold">연락처:</span> <span id="view-available-creator-contact" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">일자:</span> <span id="view-available-date"></span></p>
+      <p><span class="font-semibold">시간:</span> <span id="view-available-time"></span></p>
+      <p><span class="font-semibold">현재 인원:</span> <span id="view-available-participants"></span></p>
+      <p><span class="font-semibold">주최자:</span> <span id="view-available-creator-id"></span></p>
+      <p><span class="font-semibold">연락처:</span> <span id="view-available-creator-contact"></span></p>
     </div>
-    <button id="signup-event-btn"
-            class="w-full mt-6 bg-green-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
+    <button id="signup-event-btn" class="w-full mt-6 bg-green-600 text-white font-semibold py-2 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
       신청하기
-    </button> <!-- (I18N) -->
+    </button>
   </div>
 
-  <!-- View: View Full/Unavailable Event -->
   <div id="view-event-full" class="hidden">
-    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 정보</h3> <!-- (I18N) -->
+    <h3 class="text-xl font-bold text-gray-900 mb-2">모임 정보</h3>
+    <p id="view-full-description" class="text-lg font-bold text-pink-600 mb-3 bg-pink-50 p-2 rounded-md"></p>
     <div class="space-y-2 text-gray-800 text-sm">
-      <p><span class="font-semibold">일자:</span> <span id="view-full-date" class="text-gray-700"></span></p>
-      <p><span class="font-semibold">시간:</span> <span id="view-full-time" class="text-gray-700"></span></p>
-      <p><span class="font-semibold">현재 인원:</span> <span id="view-full-participants" class="text-gray-700"></span></p>
-      <p><span class="font-semibold">주최자:</span> <span id="view-full-creator-id" class="text-gray-700"></span></p>
-      <p><span class="font-semibold">연락처:</span> <span id="view-full-creator-contact" class="text-gray-700"></span></p>
+      <p><span class="font-semibold">일자:</span> <span id="view-full-date"></span></p>
+      <p><span class="font-semibold">시간:</span> <span id="view-full-time"></span></p>
+      <p><span class="font-semibold">현재 인원:</span> <span id="view-full-participants"></span></p>
+      <p><span class="font-semibold">주최자:</span> <span id="view-full-creator-id"></span></p>
+      <p><span class="font-semibold">연락처:</span> <span id="view-full-creator-contact"></span></p>
     </div>
-    <button disabled
-            class="w-full mt-6 bg-pink-400 text-white font-semibold py-2 rounded-lg cursor-not-allowed">
+    <button disabled class="w-full mt-6 bg-pink-400 text-white font-semibold py-2 rounded-lg cursor-not-allowed">
       정원 초과 / 신청 불가
-    </button> <!-- (I18N) -->
+    </button>
   </div>
 </div>
 

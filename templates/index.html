@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentDate = new Date();
   let selectedDate = null;
   let selectedTimeSlot = null;
-  let selectedDuration = null;
+  let selectedDuration = null; // 이 변수는 paintSelectionRange를 위해 유지됩니다.
   let selectedEventId = null;
 
   // === Selection Paint Helpers ===
@@ -202,7 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
             slotType = isFull ? 'full' : 'available';
             eventData = JSON.stringify(slotEventInfo.event);
             if (slotEventInfo.isStart) {
-              slotText = `${timeStr} · ${slotEventInfo.event.current} / ${slotEventInfo.event.max}명`;
+              const description = slotEventInfo.event.description || '모임';
+              slotText = `${description} · ${slotEventInfo.event.current} / ${slotEventInfo.event.max}명`;
             } else {
               slotText = `&nbsp;`;
               slotClass += ' opacity-80';
@@ -219,8 +220,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      if (createEventView && !createEventView.classList.contains('hidden') && selectedTimeSlot && selectedDuration) {
-        paintSelectionRange(selectedTimeSlot, selectedDuration);
+      const durationSelectedInput = document.getElementById('duration-selected');
+      if (createEventView && !createEventView.classList.contains('hidden') && selectedTimeSlot && durationSelectedInput?.value) {
+        paintSelectionRange(selectedTimeSlot, durationSelectedInput.value);
       }
     } catch (error) {
       if (error.message !== 'Unauthorized') {
@@ -267,7 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
     await renderDailySchedule(selectedDate);
   }
 
-  // MODIFIED: This entire function is updated for the default duration feature
   function handleTimeSlotClick(e) {
     const slot = e.target.closest('.time-slot');
     if (!slot) return;
@@ -298,17 +299,9 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.classList.toggle('cursor-not-allowed', disabled);
       });
 
-      selectedDuration = null;
-      document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-emerald-500', 'text-white'));
-
-      const DEFAULT_DURATION = 60;
-      if (DEFAULT_DURATION <= availableMinutes) {
-        selectedDuration = DEFAULT_DURATION;
-        const defaultDurationBtn = document.querySelector(`.duration-btn[data-duration="${DEFAULT_DURATION}"]`);
-        if (defaultDurationBtn) {
-          defaultDurationBtn.classList.add('bg-emerald-500', 'text-white');
-        }
-        paintSelectionRange(selectedTimeSlot, selectedDuration);
+      selectedDuration = document.getElementById('duration-selected')?.value || null;
+      if (selectedDuration) {
+          paintSelectionRange(selectedTimeSlot, selectedDuration);
       }
 
     } else {
@@ -320,11 +313,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const creatorIdDisplay = eventData.creator?.id ?? '';
       const creatorContactDisplay = eventData.creator?.phone ?? '';
       const dateDisplay = formatKoreanDate(selectedDate);
+      const descriptionDisplay = eventData.description || '내용 없음';
 
       if (slotType === 'available') {
         showEventDetailView('available');
         document.getElementById('view-available-date').textContent = dateDisplay;
         document.getElementById('view-available-time').textContent = timeDisplay;
+        document.getElementById('view-available-description').textContent = descriptionDisplay;
         document.getElementById('view-available-participants').textContent = participantsDisplay;
         document.getElementById('view-available-creator-id').textContent = creatorIdDisplay;
         document.getElementById('view-available-creator-contact').textContent = creatorContactDisplay;
@@ -332,6 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showEventDetailView('full');
         document.getElementById('view-full-date').textContent = dateDisplay;
         document.getElementById('view-full-time').textContent = timeDisplay;
+        document.getElementById('view-full-description').textContent = descriptionDisplay;
         document.getElementById('view-full-participants').textContent = participantsDisplay;
         document.getElementById('view-full-creator-id').textContent = creatorIdDisplay;
         document.getElementById('view-full-creator-contact').textContent = creatorContactDisplay;
@@ -340,11 +336,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function handleCreateEvent() {
-    if (!selectedDate || !selectedTimeSlot || !selectedDuration)
-      return window.showAlert("날짜, 시간, 진행 시간을 선택해주세요.");
-
+    const createBtn = document.getElementById('create-event-submit-btn');
+    const originalBtnText = '생성하기';
+    const description = document.getElementById('event-description').value;
+    const durationSelectedInput = document.getElementById('duration-selected');
+    const currentSelectedDuration = durationSelectedInput ? durationSelectedInput.value : null;
     const minParticipants = document.getElementById('min-participants').value;
     const maxParticipants = document.getElementById('max-participants').value;
+
+    if (!selectedDate || !selectedTimeSlot || !currentSelectedDuration) {
+      return window.showAlert("날짜, 시간, 진행 시간을 선택해주세요.");
+    }
+    if (!description.trim()) {
+      return window.showAlert("모임 설명을 입력해주세요.");
+    }
 
     if (+minParticipants > +maxParticipants)
       return window.showAlert("최소 인원은 최대 인원보다 많을 수 없습니다.");
@@ -352,15 +357,19 @@ document.addEventListener('DOMContentLoaded', () => {
       return window.showAlert("참여 인원은 1명 이상이어야 합니다.");
 
     window.showLoader();
+    createBtn.disabled = true;
+    createBtn.textContent = '처리 중...';
+
     try {
       const response = await window.authedFetch('/api/events', {
         method: 'POST',
         body: JSON.stringify({
           date: selectedDate,
           time: selectedTimeSlot,
-          duration: parseInt(selectedDuration),
+          duration: parseInt(currentSelectedDuration),
           min_participants: parseInt(minParticipants),
-          max_participants: parseInt(maxParticipants)
+          max_participants: parseInt(maxParticipants),
+          description: description
         })
       });
       const result = await response.json();
@@ -369,6 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showEventDetailView('none');
         await renderDailySchedule(selectedDate);
         await renderCalendar(currentDate);
+        document.getElementById('event-description').value = '';
       } else {
         window.showAlert(result.message || "모임 생성에 실패했습니다.");
       }
@@ -376,6 +386,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (error.message !== 'Unauthorized') window.showAlert("모임 생성에 실패했습니다.");
     } finally {
       window.hideLoader();
+      createBtn.disabled = false;
+      createBtn.textContent = originalBtnText;
     }
   }
 
@@ -426,12 +438,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (scheduleSlotsContainer) scheduleSlotsContainer.addEventListener('click', handleTimeSlotClick);
       if (createEventBtn) createEventBtn.addEventListener('click', handleCreateEvent);
       if (signupEventBtn) signupEventBtn.addEventListener('click', handleSignupEvent);
+
+      // event_details.html의 보조 스크립트가 시각적 처리를 담당하므로,
+      // 메인 스크립트는 상태 업데이트 및 재그리기만 담당합니다.
       if (durationOptions) {
         durationOptions.addEventListener('click', (e) => {
           const btn = e.target.closest('.duration-btn');
           if (!btn || btn.disabled) return;
-          document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('bg-emerald-500', 'text-white'));
-          btn.classList.add('bg-emerald-500', 'text-white');
+
           selectedDuration = btn.dataset.duration;
 
           if (selectedTimeSlot) {
