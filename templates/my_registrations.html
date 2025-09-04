@@ -11,7 +11,6 @@
       <h1 class="text-3xl font-bold text-gray-900 border-b pb-2 flex-1">나의 예약 현황</h1>
     </div>
 
-    <!-- 필터 탭 (NEW) -->
     <div class="mb-8">
       <div class="inline-flex rounded-xl border border-gray-200 p-1 bg-gray-50">
         <button data-filter="upcoming"
@@ -23,12 +22,10 @@
       </div>
     </div>
 
-    <!-- 두 섹션을 반응형 그리드로 (UI) -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       <section>
         <h2 class="text-2xl font-semibold text-gray-900 mb-4">내가 만든 모임</h2>
         <div id="created-events-container" class="space-y-4">
-          <!-- 스켈레톤 로더 (NEW) -->
           <div class="animate-pulse space-y-3">
             <div class="h-24 bg-emerald-50/60 rounded-xl"></div>
             <div class="h-24 bg-emerald-50/60 rounded-xl"></div>
@@ -39,7 +36,6 @@
       <section>
         <h2 class="text-2xl font-semibold text-gray-900 mb-4">내가 참여할 모임</h2>
         <div id="attended-events-container" class="space-y-4">
-          <!-- 스켈레톤 로더 (NEW) -->
           <div class="animate-pulse space-y-3">
             <div class="h-24 bg-green-50/60 rounded-xl"></div>
             <div class="h-24 bg-green-50/60 rounded-xl"></div>
@@ -59,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const attendedBox  = document.getElementById('attended-events-container');
   const filterTabs   = Array.from(document.querySelectorAll('.filter-tab'));
 
-  // --- State (NEW) ---
+  // --- State ---
   const state = {
     created: [],
     attended: [],
@@ -71,26 +67,21 @@ document.addEventListener('DOMContentLoaded', () => {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
-  // 날짜/시간 → KST Date 객체 (NEW)
   function toKstDate(dateStr, timeStr) {
     if (!dateStr) return null;
-    const t = (timeStr || '00:00').padStart(5, '0'); // HH:mm
-    // KST(+09:00) 기준으로 파싱
+    const t = (timeStr || '00:00').padStart(5, '0');
     const iso = `${dateStr}T${t}:00+09:00`;
     const dt = new Date(iso);
     return isNaN(dt.getTime()) ? null : dt;
   }
 
-  // 다가올/지난 필터 판정 (NEW)
   function isUpcoming(dt) {
     if (!dt) return false;
     const now = new Date();
-    // "오늘 일정"은 다가올로 취급
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     return dt >= todayStart;
   }
 
-  // D-Day 뱃지 텍스트 (NEW)
   function ddayLabel(dt) {
     if (!dt) return '';
     const now = new Date();
@@ -103,10 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return `D+${Math.abs(diff)}`;
   }
 
-  // 읽기 좋은 시간 라벨 (NEW)
   function prettyDateTime(dt) {
     if (!dt) return '-';
-    // 아시아/서울 포맷
     try {
       return new Intl.DateTimeFormat('ko-KR', {
         timeZone: 'Asia/Seoul',
@@ -118,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 스켈레톤 로더 표시 (NEW)
   function showSkeleton() {
     createdBox.innerHTML = `
       <div class="animate-pulse space-y-3">
@@ -132,13 +120,14 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>`;
   }
 
-  // 공통 카드 렌더러 (색상만 분기) (NEW)
+  // ▼▼▼ [수정된 부분] ▼▼▼
   function renderCard(ev, scheme) {
-    // scheme: 'emerald' | 'green'
     const dt = toKstDate(ev.date, ev.time);
     const badge = ddayLabel(dt);
     const countNow = Array.isArray(ev.participants) ? ev.participants.length : 0;
     const courtTypeLabel = (ev.court_type === 'full') ? '풀 코트' : '하프 코트';
+    // description 값을 안전하게 가져옵니다.
+    const description = escapeHtml(ev.description) || '모임 설명 없음';
 
     const accent = scheme === 'emerald'
       ? { ring: 'ring-emerald-200', title: 'text-emerald-700', chip: 'bg-emerald-100 text-emerald-700' }
@@ -149,7 +138,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="p-4">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <p class="font-bold ${accent.title}">
+              <h3 class="text-lg font-bold ${accent.title} truncate" title="${description}">
+                ${description}
+              </h3>
+              <p class="text-sm font-semibold text-gray-700 mt-1">
                 ${escapeHtml(ev.date)} · ${escapeHtml(ev.time)}
               </p>
               <p class="text-sm text-gray-600 mt-1">${prettyDateTime(dt)}</p>
@@ -168,7 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </span>
               </div>
             </div>
-            <!-- 액션 -->
             ${
               scheme === 'emerald'
               ? `<button class="delete-btn text-xs md:text-sm bg-gray-800 hover:bg-black text-white font-semibold py-2 px-3 md:px-4 rounded-lg"
@@ -177,8 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
                          data-event-id="${escapeHtml(ev._id)}">예약 취소</button>`
             }
           </div>
-
-          <!-- 상세 (참가자/주최자) -->
           <div class="mt-4 pt-4 border-t">
             ${
               scheme === 'emerald'
@@ -190,13 +179,13 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
   }
+  // ▲▲▲ [수정된 부분] ▲▲▲
 
   function renderParticipants(ev) {
     const parts = Array.isArray(ev.participants_details) ? ev.participants_details : [];
     if (parts.length === 0) {
       return `<p class="text-sm text-gray-500">참가자가 아직 없습니다.</p>`;
     }
-    // 5명 초과 시 접기/펼치기 (NEW)
     const preview = parts.slice(0,5).map(p =>
       `<li>${escapeHtml(p.name)} (${escapeHtml(p.id)}) - ${escapeHtml(p.phone)}</li>`
     ).join('');
@@ -224,17 +213,16 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  // 필터 적용 후 전체 렌더 (NEW)
   function renderLists() {
     createdBox.innerHTML = '';
     attendedBox.innerHTML = '';
 
     const created = (Array.isArray(state.created) ? state.created : [])
       .slice()
-      .sort((a,b) => (toKstDate(a.date,a.time) - toKstDate(b.date,b.time)));
+      .sort((a,b) => (toKstDate(b.date,b.time) - toKstDate(a.date,a.time))); // 최신순 정렬
     const attended = (Array.isArray(state.attended) ? state.attended : [])
       .slice()
-      .sort((a,b) => (toKstDate(a.date,a.time) - toKstDate(b.date,b.time)));
+      .sort((a,b) => (toKstDate(b.date,b.time) - toKstDate(a.date,a.time))); // 최신순 정렬
 
     const filteredCreated = created.filter(ev => {
       const dt = toKstDate(ev.date, ev.time);
@@ -269,7 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!window.ws || ws.readyState !== WebSocket.OPEN) return;
     showLoader();
     ws.send(JSON.stringify({ action: 'get_my_registrations' }));
-    // 타임아웃(UX)
     const timeoutMs = 7000;
     const marker = Symbol('loading');
     createdBox._loadingMarker = marker;
@@ -283,7 +270,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, timeoutMs);
   }
 
-  // base.html에 connectWebSocket()/ws 전역 가정
   if (typeof connectWebSocket === 'function') {
     connectWebSocket();
   } else {
@@ -297,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   ws.addEventListener('open', sendGetMyRegistrations);
   ws.addEventListener('close', () => {
-    // 연결 끊김 안내 (NEW)
     console.warn('웹소켓 연결이 종료되었습니다.');
   });
 
@@ -311,25 +296,23 @@ document.addEventListener('DOMContentLoaded', () => {
         state.attended = Array.isArray(data.attended_events) ? data.attended_events : [];
         createdBox._loadingMarker = undefined;
         hideLoader();
-        renderLists(); // (NEW) 필터 반영 렌더
+        renderLists();
         break;
       }
       case 'event_update': {
-        // 다른 곳에서 이벤트 변경 시 재요청
         sendGetMyRegistrations();
         break;
       }
-      default:
-        break;
     }
   });
 
   // --- Interactions ---
-  // 필터 탭 (NEW)
   filterTabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      filterTabs.forEach(t => t.classList.remove('bg-white','shadow-sm','text-gray-900'));
-      filterTabs.forEach(t => t.classList.add('text-gray-600'));
+      filterTabs.forEach(t => {
+        t.classList.remove('bg-white','shadow-sm','text-gray-900');
+        t.classList.add('text-gray-600');
+      });
       tab.classList.add('bg-white','shadow-sm');
       tab.classList.remove('text-gray-600');
       state.filter = tab.dataset.filter;
@@ -337,7 +320,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 참가자 더보기 토글 (NEW, 이벤트 위임)
   [createdBox, attendedBox].forEach(box => {
     box.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-more="toggle"]');
@@ -351,19 +333,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 버튼 액션: 삭제/취소 (기존 로직 유지, 텍스트만 다듬음)
   createdBox.addEventListener('click', async (e) => {
     const btn = e.target.closest('.delete-btn');
     if (!btn) return;
     if (!confirm('이 모임을 완전히 삭제합니다. 계속할까요?')) return;
-
     showLoader();
     try {
       const eventId = btn.dataset.eventId;
       const response = await authedFetch(`/api/events/${eventId}`, { method: 'DELETE' });
       const result = await response.json().catch(() => ({}));
       showAlert(result.message ?? '모임이 삭제되었습니다.');
-      // 성공 시 서버가 event_update 방송 → WS가 자동으로 재로딩
     } catch (err) {
       showAlert('삭제에 실패했습니다. 다시 시도해 주세요.');
     } finally {
@@ -375,14 +354,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = e.target.closest('.cancel-btn');
     if (!btn) return;
     if (!confirm('예약을 취소하시겠습니까?')) return;
-
     showLoader();
     try {
       const eventId = btn.dataset.eventId;
       const response = await authedFetch(`/api/events/${eventId}/signup`, { method: 'DELETE' });
       const result = await response.json().catch(() => ({}));
       showAlert(result.message ?? '예약이 취소되었습니다.');
-      // 성공 시 서버가 event_update 방송 → WS가 자동으로 재로딩
     } catch (err) {
       showAlert('예약 취소에 실패했습니다. 다시 시도해 주세요.');
     } finally {

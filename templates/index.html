@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentDate = new Date();
   let selectedDate = null;
   let selectedTimeSlot = null;
-  let selectedDuration = null;
+  let selectedDuration = null; // 이 변수는 paintSelectionRange를 위해 유지됩니다.
   let selectedEventId = null;
   let selectedCourtType = 'half'; // Default court type
 
@@ -240,8 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      if (createEventView && !createEventView.classList.contains('hidden') && selectedTimeSlot && selectedDuration) {
-        paintSelectionRange(selectedTimeSlot, selectedDuration);
+      const durationSelectedInput = document.getElementById('duration-selected');
+      if (createEventView && !createEventView.classList.contains('hidden') && selectedTimeSlot && durationSelectedInput?.value) {
+        paintSelectionRange(selectedTimeSlot, durationSelectedInput.value);
       }
     } catch (error) {
       if (error.message !== 'Unauthorized') {
@@ -358,11 +359,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function handleCreateEvent() {
-    if (!selectedDate || !selectedTimeSlot || !selectedDuration)
-      return window.showAlert("날짜, 시간, 진행 시간을 선택해주세요.");
-
+    const createBtn = document.getElementById('create-event-submit-btn');
+    const originalBtnText = '생성하기';
+    const description = document.getElementById('event-description').value;
+    const durationSelectedInput = document.getElementById('duration-selected');
+    const currentSelectedDuration = durationSelectedInput ? durationSelectedInput.value : null;
     const minParticipants = document.getElementById('min-participants').value;
     const maxParticipants = document.getElementById('max-participants').value;
+
+    if (!selectedDate || !selectedTimeSlot || !currentSelectedDuration) {
+      return window.showAlert("날짜, 시간, 진행 시간을 선택해주세요.");
+    }
+    if (!description.trim()) {
+      return window.showAlert("모임 설명을 입력해주세요.");
+    }
 
     if (+minParticipants > +maxParticipants)
       return window.showAlert("최소 인원은 최대 인원보다 많을 수 없습니다.");
@@ -370,13 +380,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return window.showAlert("참여 인원은 1명 이상이어야 합니다.");
 
     window.showLoader();
+    createBtn.disabled = true;
+    createBtn.textContent = '처리 중...';
+
     try {
       const response = await window.authedFetch('/api/events', {
         method: 'POST',
         body: JSON.stringify({
           date: selectedDate,
           time: selectedTimeSlot,
-          duration: parseInt(selectedDuration),
+          duration: parseInt(currentSelectedDuration),
           min_participants: parseInt(minParticipants),
           max_participants: parseInt(maxParticipants),
           court_type: selectedCourtType // Add court type to request
@@ -388,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showEventDetailView('none');
         await renderDailySchedule(selectedDate);
         await renderCalendar(currentDate);
+        document.getElementById('event-description').value = '';
       } else {
         window.showAlert(result.message || "모임 생성에 실패했습니다.");
       }
@@ -395,6 +409,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (error.message !== 'Unauthorized') window.showAlert("모임 생성에 실패했습니다.");
     } finally {
       window.hideLoader();
+      createBtn.disabled = false;
+      createBtn.textContent = originalBtnText;
     }
   }
 
@@ -463,6 +479,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (scheduleSlotsContainer) scheduleSlotsContainer.addEventListener('click', handleTimeSlotClick);
       if (createEventBtn) createEventBtn.addEventListener('click', handleCreateEvent);
       if (signupEventBtn) signupEventBtn.addEventListener('click', handleSignupEvent);
+
+      // event_details.html의 보조 스크립트가 시각적 처리를 담당하므로,
+      // 메인 스크립트는 상태 업데이트 및 재그리기만 담당합니다.
       if (durationOptions) {
         durationOptions.addEventListener('click', (e) => {
           const btn = e.target.closest('.duration-btn');
